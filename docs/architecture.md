@@ -21,6 +21,31 @@ The simulation filters, reality judges. Everything else serves that loop.
                                                                  written to audience memory
 ```
 
+## Agency layer (above the engine)
+
+```
+ Organization ─ knowledge sources (provided | research, confidential flag)
+      │          findings (labelled, pending → approved/rejected)  ── only approved findings reach campaigns
+      ├─ Products (draft from research → approved by the user; merge, archive)
+      └─ Campaigns ─ fields (+ where each came from) ─ brief (draft → confirmed) ─ engine DB per campaign
+                      concepts → review → assets/Reels → launch (user publishes) → results → reality → next
+```
+- `engine/agency.py` stores it in `data/agency.db`; each campaign's engine runs unchanged in
+  `data/campaign-data/<id>.db`. Win/flop lessons are copied only between campaigns of the same organization;
+  Graphiti groups are per organization (`memory.groups`).
+- Labels are decided in Python: a finding's evidence quote must be found in the cited source; provided source →
+  *Provided*, public source → *Found through research*, inference sections → *Suggested by AI*, no match →
+  *Unconfirmed*, gaps → *Missing*. Editing a finding makes it the organization's own statement.
+- Research (`engine/research.py`) reads only what the approval screen lists: the org's site (same domain, dialled
+  page count), competitor home pages, Wikipedia. Private/loopback addresses are refused.
+- Concepts (`engine/concepts.py`): one lead per distinct idea, near-duplicates folded as variations; audience
+  groups from the sampled facets (age band + strongest domain), never from the model; one cached review call per
+  concept; revise/combine are judged on the same simulated people and carry no credit to the makers.
+- Reality (`engine/reality.py`): predicted vs real rank, misses reported, best concept/message/visual by real score,
+  best audience only when results are split by audience.
+- SQLite connections are shared across request threads and jobs, so `db.Locked` serializes every call and reads
+  rows in full (a race once bound a campaign to the default engine file).
+
 ## Components
 
 | Part | File | Open-source tech |
@@ -31,7 +56,9 @@ The simulation filters, reality judges. Everything else serves that loop.
 | Audience personality | `engine/personality.py`, `engine/personas.py` | 30-facet IPIP-NEO-120 copula (n=271,547) from developmental-agent-simulator; genes + nonshared environment + maturation, lazy closed form |
 | Audience feed (optional) | `audience/` (own Python 3.11 venv), `engine/audience.py` | MiroFish's OASIS runner (AGPL-3.0, copied), OASIS / camel-oasis (Apache-2.0); `AUDIENCE_BACKEND=oasis` |
 | Audience memory | `engine/memory.py` | Graphiti + FalkorDB (or SQLite fallback) |
-| API + dashboard | `engine/api.py`, `web/index.html` | FastAPI, vanilla JS |
+| Agency store, research, concepts, reality | `engine/agency.py`, `engine/research.py`, `engine/concepts.py`, `engine/reality.py` | SQLite, httpx, Wikipedia API |
+| API + app | `engine/api.py`, `engine/routes/`, `engine/hub.py`, `site/src/app/` | FastAPI, React + Vite |
+| Engine console | `web/console.html` | vanilla JS |
 | Reel Director | `engine/reel.py`, `engine/reel_providers.py`, `engine/compose.py` | pydantic, MoviePy + ffmpeg, Pillow, Piper TTS, Openverse (optional) |
 | Config / dials | `config.yaml` | YAML |
 

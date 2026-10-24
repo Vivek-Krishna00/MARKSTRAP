@@ -3,7 +3,10 @@ name: evolve-campaign
 description: Seed a MarkStrap campaign, run generations, inspect lineages and import real results with the engine CLI. Use when asked to run, demo, debug or inspect the campaign engine.
 ---
 
-All commands read `.env` (via `make`) for the OpenAI-compatible LLM endpoint.
+All commands read `.env` (via `make`) for the OpenAI-compatible LLM endpoint. The CLI works on one engine file
+(`DB_PATH`, default `data/engine.db`). Campaigns made in the app each have their own file,
+`data/campaign-data/<campaign id>.db`: point `DB_PATH` at it to inspect one (the console does the same at
+`/console?campaign=<id>`).
 
 1. Seed: `.venv/bin/python -m engine.cli new-campaign "<goal>" "<target market>" --type direct|brand`
    (wipes `data/engine.db`; run `snapshot` first to keep the old campaign).

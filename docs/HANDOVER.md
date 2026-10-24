@@ -1,13 +1,15 @@
-# MarkStrap — Handover (2026-10-25, after the Reel Director)
+# MarkStrap — Handover (2026-10-25, after the agency workflow)
 
 Read this first, then `CLAUDE.md`, `docs/architecture.md` and `docs/reel-director.md`.
 Repo: github.com/Vivek-Krishna00/MARKSTRAP (**public**), branch `main` (commits go straight to main).
-`make test` = 40 passing (29 engine/personality + 11 Reel Director).
+`make test` = 44 passing (engine/personality, Reel Director, agency workflow).
 
 ## What this is
 Hackathon project; every tool and model inside the product is open source / open weight (hard rule).
-- **MarkStrap** = an AI marketing agency. User flow at `/app`: materials → goal & limits → brief → explore →
-  approve → **Reel** (optional, per approved concept) → launch sheet → import real results → next experiment.
+- **MarkStrap** = an AI marketing agency. App at `/app` (React, `site/src/app/`): Organization → knowledge →
+  research (with approval) → labelled profile review → products → campaign (pre-filled, sources shown) → brief →
+  concepts (simulated) → review/compare/revise/combine → assets + **Reel** → launch pack → real results →
+  simulation vs reality → one next experiment. Home shows what needs attention.
 - **Campaign Engine** underneath (design doc "Campaign Engine — Design Notes", PDF in `~/Downloads/`; Decision Log
   D1–D71 not in the PDF): breeds/castes of maker agents, queens breed keeper/explorer children, lessons inherited at
   birth, simulated audience **only demotes**, **reality judges**.
@@ -35,9 +37,32 @@ Hackathon project; every tool and model inside the product is open source / open
 | LLM client | `engine/llm.py` | `chat_json`; `LLM_PROVIDER=vertex` → ADC token, else base URL + key |
 | Agency layer | `engine/brief.py` | materials (text/URL/PDF), brief extraction, next-experiment proposal |
 | Images | `engine/render.py` | approved concepts only; open-weight model behind `IMAGE_BASE_URL`. **Parked**: no host yet |
-| **Reel Director** | `engine/reel.py`, `engine/reel_providers.py`, `engine/compose.py`, `#reel/<id>` in `web/app.html` | see below |
-| API / UI | `engine/api.py`, `web/app.html`, `web/console.html`, `site/` | `/` site, `/app`, `/console`; site via `make site` |
+| **Reel Director** | `engine/reel.py`, `engine/reel_providers.py`, `engine/compose.py`, `site/src/app/pages/Reel.jsx` | see below |
+| Agency layer | `engine/agency.py`, `engine/research.py`, `engine/concepts.py`, `engine/reality.py`, `engine/brief.py` | see "Agency workflow" below |
+| API / UI | `engine/api.py`, `engine/routes/`, `engine/hub.py`, `site/` (website + `src/app/`), `web/console.html` | `/` site, `/app`, `/console?campaign=<id>`; both pages via `make site` (build output is committed) |
 | Brand mark | `site/mark.py` → `web/mark.png`, `web/favicon.png` | Thomas attractor density-rendered in viridis |
+
+## Agency workflow (built 2026-10-25, second session)
+- Data: `data/agency.db` (orgs, sources, findings, products, campaigns). **One engine DB per campaign**:
+  `data/campaign-data/<id>.db`; `evolve.py` runs unchanged inside it. Lessons (win/flop) copied only between
+  campaigns of the same org; Graphiti groups per org. First start migrates `data/org.json` + `data/engine.db` into
+  "My organization" (engine file referenced in place, not modified).
+- Research runs only after "Research with my approval" (lists what it reads): own site (≤ `research.max_pages`),
+  competitor home pages, Wikipedia (needs a UA with a contact URL). Labels set in Python from the evidence quote.
+  Only approved findings and approved products reach prefill and the brief.
+- Concepts: `make_ad` now also returns concept_name, main_idea, emotion, why_it_may_work, risks. `concepts.distinct`
+  folds near-duplicates (idea words, not captions); audience groups from facets; reviews cached per concept version
+  (written at the end of exploration); revise/combine judged on 12 simulated people, no maker credit.
+- Assets: Reel needs an approved concept; brief has voice/captions on-off, voice style, music direction; capability
+  notes shown before production; **final approval** required before it counts in the launch pack.
+- Launch: user publishes and marks it; never auto-posts. Results by form (objective's metrics first, incl.
+  impressions for direct objectives) or CSV. `reality.compare` + next experiment (one change, keep_same, not_proven).
+- `db.Locked` wraps every shared SQLite connection (agency + engine): a race between parallel first requests after
+  a restart once bound a campaign to the default engine file. Regression test included.
+- Verified in Chrome with a stand-in model (no cloud credentials on that machine): Microsoft → Xbox Game Pass full
+  story incl. real xbox.com/Wikipedia research, Reel export + approval, results, comparison, next experiment;
+  light/dark; 390 px width (all pages except the campaign form and brief, which a browser extension blocked from
+  being measured in a frame).
 
 ## Reel Director (built 2026-10-25)
 - Flow: approved concept → **Create Reel** → brief pre-filled (`reel.prefill`: concept + campaign brief + constraints;
@@ -74,6 +99,9 @@ Hackathon project; every tool and model inside the product is open source / open
 - `.env`: `MEMORY_BACKEND=graphiti`, `AUDIENCE_BACKEND=oasis`. Experiments: `MEMORY_NAMESPACE=test-` + scratch `DB_PATH`.
 
 ## Pending
+0. **Live run of the new agency flow on Vertex** (DeepSeek) has not been done: the second session's machine had no
+   gcloud/ADC. Run the Microsoft → Xbox story once with the real brain and check research extraction quality,
+   brief, concept distinctness and reviews. Reel CTA now uses the brief's action sentence (a long URL overflowed).
 1. Images (parked by the user): pick a host for an open-weight model (CPU SD-Turbo, or upgrade for an L4), set
    `IMAGE_BASE_URL`. Biggest visual upgrade for Reels too.
 2. Generated video clips: needs a hosted open video model (Wan 2.x / LTX-Video) behind `reel_providers.video`.
@@ -84,10 +112,11 @@ Hackathon project; every tool and model inside the product is open source / open
 6. Docker image untested (OASIS venv + torch; now also needs `make reel-setup` for the voice).
 
 ## Dev environment facts
-- Main venv `.venv` (Python 3.13); `uv` inside `.venv`; sidecar `audience/.venv` (Python 3.11, camel-oasis 0.2.5,
+- Main venv `.venv` (Python 3.13; Homebrew's default is now 3.15, whose Pillow lacks FreeType: build the venv with
+  `uv venv -p 3.13 --seed .venv`); `uv` inside `.venv`; sidecar `audience/.venv` (Python 3.11, camel-oasis 0.2.5,
   `mcp==1.24.0` pinned). TwHIN-BERT cached in `~/.cache/huggingface`.
-- Live runs: `set -a; . ./.env; set +a`, scratch `DB_PATH` + `MEMORY_NAMESPACE=test-`; `data/engine.db` is the
-  user's campaign — keep it untouched. `tests/conftest.py` strips live-service env vars.
+- Live runs: `set -a; . ./.env; set +a`, scratch `AGENCY_DB` + `DB_PATH` + `MEMORY_NAMESPACE=test-`;
+  `data/agency.db`, `data/campaign-data/` and `data/engine.db` are the user's data — keep them untouched. `tests/conftest.py` strips live-service env vars.
 - `make reel-demo` uses `data/reel-demo.db`; reels and the cache live in `data/reels/`, voices in `data/voices/`.
 - Screenshots/UI checks: Playwright with `channel="chrome"` (cached Playwright browsers don't match the pip
   version), or headless Chrome `--headless=new --screenshot`. `timeout` is not installed on this Mac.
@@ -112,6 +141,8 @@ guardrails/legal labelling; auto-posting; auth; MiroFish's report agent / graph 
 
 ## Open flags
 - Repo is public: never commit `.env`, `secrets/`, or `data/` (campaign DB, client materials).
-- No auth: Reel and campaign endpoints are open to anyone who can reach the server.
+- No auth: organization, campaign and Reel endpoints are open to anyone who can reach the server.
+- "Confidential" material is never quoted (prompt rule + an 8-word verbatim check in the review), but its text is
+  still sent to the configured model for understanding. Fine for a self-hosted open model; say so to clients.
 - `audience/` is AGPL-3.0 (copied MiroFish code); keep `audience/LICENSE` + `NOTICE`. Piper is GPL-3.0.
 - Kanishk's repo (copula data) has no licence — confirm with him.
