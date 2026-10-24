@@ -1,0 +1,16 @@
+{
+  "name": "markstrap-site",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vite", "build": "vite build" },
+  "dependencies": {
+    "gsap": "3.13.0",
+    "motion": "12.23.12",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "4.3.4",
+    "vite": "5.4.19"
+  }
+}
