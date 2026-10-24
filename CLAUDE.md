@@ -20,13 +20,26 @@ endpoint, Graphiti + FalkorDB, FastAPI, SQLite. No proprietary APIs in `engine/`
 - `audience/` + `engine/audience.py` — MiroFish's OASIS feed as the audience (`AUDIENCE_BACKEND=oasis`, `make audience-setup`); copied AGPL code, no Zep
 - `engine/memory.py` — audience memory (SQLite default, Graphiti when `MEMORY_BACKEND=graphiti`)
 - `engine/llm.py` — single `chat_json` call; tests monkeypatch it
-- `site/` (React + Vite, reveals in `site/src/motion.jsx`, no animation library) — the MarkStrap website, built by `make site` into `web/site/`, served at `/`
-- `web/app.html` (at `/app`) — the user flow: materials → goal & limits → brief → explore → approve → launch → results & next
+- `site/` (React + Vite) — two pages built by `make site` into `web/site/`: the website (`index.html` + `src/`, at `/`,
+  reveals in `src/motion.jsx`) and the agency app (`app.html` + `src/app/`, at `/app`, hash routes, no router library)
+- App flow: Organization → knowledge → research (with approval) → profile review → products → campaign (pre-filled,
+  sources shown) → brief → concepts (simulated) → review/compare/revise/combine → assets + Reel → launch pack →
+  real results → simulation vs reality → one next experiment. No castes/queens/breeding wording in `src/app`
+  (a test checks); user-facing copy lives in `site/src/app/copy.js`
+- `engine/agency.py` — orgs, knowledge sources, labelled findings, products, campaigns (`AGENCY_DB`, default
+  `data/agency.db`); **each campaign has its own engine DB** `data/campaign-data/<id>.db`; lessons travel only
+  within one org; one-time migration of the old `data/org.json` + `data/engine.db`
+- `engine/research.py` — website + competitors + Wikipedia, only after approval; labels set in Python from where the
+  evidence quote is (provided / research / AI / unconfirmed / missing)
+- `engine/concepts.py` — distinct concepts, audience groups from sampled facets, score reasons, review, revise, combine
+- `engine/reality.py` — simulation vs reality, computed; `engine/brief.py` — brief v2, next experiment (one change)
 - `engine/reel.py` + `engine/reel_providers.py` + `engine/compose.py` — Reel Director: approved concept → validated
-  storyboard → assets/voice/captions → critic + per-scene repair → MoviePy MP4 (`#reel/<id>` in `/app`,
-  `make reel-demo`); open source only, so no Remotion. Docs `docs/reel-director.md`
-- `engine/brief.py` — materials ingestion (text/links/PDF), brief extraction, next-experiment proposal
-- `engine/api.py` + `web/console.html` (at `/console`) — engine console; `engine/cli.py` — same ops from the terminal
+  storyboard → assets/voice/captions → critic + per-scene repair → MoviePy MP4 (`#/campaigns/<id>/reels/<rid>` in
+  `/app`, `make reel-demo`); open source only, so no Remotion. Docs `docs/reel-director.md`
+- `engine/api.py` (thin) + `engine/routes/{agency,campaign}.py` + `engine/hub.py` (shared connections, run lock,
+  campaign stage). Campaign routes live under `/api/campaigns/{cid}/…`
+- `web/console.html` (at `/console?campaign=<id>`) — engine console for one campaign (makers, lineage, dials);
+  `engine/cli.py` — engine ops from the terminal on one engine file (`DB_PATH`)
 - `config.yaml` — breeds, castes, dials, per-platform signal weights
 
 ## Rules

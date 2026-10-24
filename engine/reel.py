@@ -223,7 +223,7 @@ def load(con, reel_id) -> dict:
 
 def view(con, reel_id) -> dict:
     """Everything the UI needs: reel, scenes with their state and composed prompt, assets, providers."""
-    busy = reel_id in _running  # read before the row: a run that ends in between must not look idle-but-unfinished
+    busy = reel_id in _running  # read first: "not busy" then means the data below is from after the run
     r = load(con, reel_id)
     st = scene_state(con, reel_id)
     r["scenes"] = [{**s, "state": st.get(s["id"], {})} for s in (r.get("spec") or {}).get("scenes", [])]
@@ -250,11 +250,12 @@ def prefill(ad: dict, campaign: dict) -> dict:
         "platform": PLATFORMS.get((c.get("platform") or "").lower(), "instagram_reels"),
         "durationSeconds": CFG["duration_s"],
         "brandVoice": k.get("brand_rules") or "warm, specific, no hype",
-        "language": k.get("language") or "English", "voice": "auto",
+        "language": k.get("language") or "English", "speaker": "auto",
         "colors": colors[:4], "fonts": ["Manrope"],
-        "cta": b.get("destination") or "Link in bio",
+        "cta": b.get("action") or b.get("destination") or "Link in bio",  # a sentence reads better on screen than a URL
         "mustNot": k.get("restricted_claims") or "",
         "notes": "",
+        "voice": "on", "captions": "on", "voiceStyle": "", "musicDirection": "",
     }
 
 
@@ -444,11 +445,12 @@ VOICES = {  # Kokoro voices: (female, male) per language; the brief can name any
 
 def voice_for(spec: dict, brief: dict) -> tuple[str, float, str]:
     """Voice, speed and language from the brief and the director's voice direction. Deterministic."""
-    direction = f"{spec['voiceover'].get('voiceDirection', '')} {brief.get('brandVoice', '')}".lower()
+    direction = (f"{brief.get('voiceStyle', '')} {spec['voiceover'].get('voiceDirection', '')} "
+                 f"{brief.get('brandVoice', '')}").lower()
     language = (brief.get("language") or "English").lower()
     lang = "hi" if "hindi" in language else "en-gb" if "british" in direction else "en-us"
     male = bool(re.search(r"\b(male|man|deep|baritone|guy)\b", direction)) and "female" not in direction
-    voice = brief.get("voice") if brief.get("voice") not in (None, "", "auto") else VOICES[lang][male]
+    voice = brief.get("speaker") if brief.get("speaker") not in (None, "", "auto") else VOICES[lang][male]
     speed = (CFG["voice_speed_fast"] if re.search(r"energetic|punchy|quick|fast|hype|excited", direction)
              else CFG["voice_speed_calm"] if re.search(r"calm|slow|soothing|gentle|soft", direction)
              else CFG["voice_speed"])
@@ -516,15 +518,17 @@ def stage_assets(con, reel_id, spec, asset_list):
                               "fallback": "generation failed"}, attempts=(cur.get("attempts") or 0) + 1)
 
 
-def stage_voice(con, reel_id, spec):
+def stage_voice(con, reel_id, spec, brief=None):
     avail, st = P.available(), scene_state(con, reel_id)
-    v = voice_for(spec, load(con, reel_id)["brief"])
+    brief = brief if brief is not None else load(con, reel_id)["brief"]
+    mute = brief.get("voice") == "off"
+    v = voice_for(spec, brief)
     for s in spec["scenes"]:
         cur = st.get(s["id"], {})
-        h = audio_hash(s, avail, v)
+        h = audio_hash(s, avail, v) + ("-mute" if mute else "")
         if (cur.get("audio") or {}).get("hash") == h:
             continue
-        if not s["voiceover"].strip():
+        if mute or not s["voiceover"].strip():
             save_scene(con, reel_id, s["id"], audio={"hash": h, "path": None, "duration": 0, "words": []})
             continue
         path, meta = P.tts(s["voiceover"], CFG["wpm"], *v)
@@ -574,7 +578,7 @@ def timeline(spec: dict, brief: dict, st: dict, asset_list: list[dict], preview:
         "colors": brief.get("colors") or DEFAULT_COLORS,
         "caption": {**spec["captionStyle"], "words": CFG["caption_words"], "max_chars": CFG["caption_max_chars"]},
         "font": font["path"] if font else str(Path(__file__).resolve().parent / "data" / "fonts" / "Manrope.ttf"),
-        "scenes": scenes, "words": words, "vo": vo,
+        "scenes": scenes, "words": [] if brief.get("captions") == "off" else words, "vo": vo,
         "music": {"path": music["path"] if music else str(P.music(D + 1, seed)[0]), "volume": CFG["music_volume"],
                   "duck": CFG["duck_volume"], "ramp": CFG["duck_ramp_s"]},
         "sfx": sfx, "sfx_volume": CFG["sfx_volume"], "transition_s": CFG["transition_s"],
@@ -974,7 +978,7 @@ def produce(con, reel_id: str):
         save(con, reel_id, status="producing", error=None)
         for stage in ("assets", "voice", "captions"):
             save(con, reel_id, stage=stage)
-            {"assets": lambda: stage_assets(con, reel_id, spec, al), "voice": lambda: stage_voice(con, reel_id, spec),
+            {"assets": lambda: stage_assets(con, reel_id, spec, al), "voice": lambda: stage_voice(con, reel_id, spec, brief),
              "captions": lambda: stage_captions(con, reel_id, spec)}[stage]()
         save(con, reel_id, stage="critic")
         history = []
@@ -991,7 +995,7 @@ def produce(con, reel_id: str):
             history.append({"round": rnd + 1, "repaired": weak, "before": crit["overall"]})
             _log(con, reel_id, f"critic round {rnd + 1}: repaired {', '.join(weak)}")
             stage_assets(con, reel_id, spec, al)  # hashes: only the revised scenes re-make anything
-            stage_voice(con, reel_id, spec)
+            stage_voice(con, reel_id, spec, brief)
             stage_captions(con, reel_id, spec)
             crit = critique(spec, scene_state(con, reel_id), brief, al)
         save(con, reel_id, critic={**crit, "history": history}, stage="preview")

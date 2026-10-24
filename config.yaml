@@ -24,21 +24,21 @@ breeds:
   copywriter:
     required: true
     castes:
-      tension: {target: 6, gate: 0.6, seed: "Write copy built on friction, tension and an open loop the reader must close."}
-      storytelling: {target: 6, gate: 0.6, seed: "Write copy as a tiny biographical story with a human at the centre."}
+      tension: {label: "Tension and curiosity", target: 6, gate: 0.6, seed: "Write copy built on friction, tension and an open loop the reader must close."}
+      storytelling: {label: "Human story", target: 6, gate: 0.6, seed: "Write copy as a tiny biographical story with a human at the centre."}
   visual_maker:
     required: true
     castes:
-      bold: {target: 5, gate: 0.6, seed: "Describe a bold, high-contrast single-subject image that stops the scroll."}
-      candid: {target: 5, gate: 0.6, seed: "Describe a candid, real-life photo that feels unpolished and authentic."}
+      bold: {label: "Bold, high-contrast", target: 5, gate: 0.6, seed: "Describe a bold, high-contrast single-subject image that stops the scroll."}
+      candid: {label: "Candid, real-life", target: 5, gate: 0.6, seed: "Describe a candid, real-life photo that feels unpolished and authentic."}
   font_picker:
     required: false
     castes:
-      classic: {target: 3, gate: 0.8, seed: "Pick typography that feels trustworthy and timeless."}
+      classic: {label: "Classic type", target: 3, gate: 0.8, seed: "Pick typography that feels trustworthy and timeless."}
   posting_manager:
     required: true
     castes:
-      timing: {target: 4, gate: 0.7, seed: "Pick the platform and posting time where this audience is most active and the algorithm rewards this format."}
+      timing: {label: "Audience timing", target: 4, gate: 0.7, seed: "Pick the platform and posting time where this audience is most active and the algorithm rewards this format."}
 
 # Real-world scoring: signal -> (weight, denominator). Ratios, not raw counts.
 platforms:
@@ -119,3 +119,43 @@ reel:                             # Reel Director (engine/reel.py) and composer 
   render_timeout_s: 900
   provider_timeout_s: 120
   upload_max_mb: 200
+
+research:                         # engine/research.py: runs only after the user approves the plan
+  max_pages: 8                    # pages read from the organization's own website
+  max_competitor_pages: 1         # home page of each competitor the user lists
+  page_chars: 6000                # text kept per page
+  wikipedia_chars: 8000
+  prompt_chars: 40000             # all source text sent to the extraction call
+  min_quote_chars: 12             # shorter evidence quotes cannot confirm a finding
+  timeout_s: 15
+  priority_words: [about, product, service, pricing, solution, company, brand, platform, offer, plan]
+
+concepts:                         # engine/concepts.py: how concepts are shown and reviewed
+  shown: 6                        # distinct concepts on the review screen
+  dup_threshold: 0.6              # word overlap (name, idea, headline) at which two ads count as one idea
+  same_approach_threshold: 0.45   # lower bar when both ads also share the same creative approach
+  group_margin: 0.1               # a group responds positively/negatively when its mean differs by this
+  min_group_size: 2               # smaller groups are not reported
+  confident_sample: 30            # reactions needed before simulated confidence reads "moderate"
+  confidential_span_words: 8      # this many consecutive words copied from a confidential source flags a risk
+  revision_audience: 12           # simulated people who react to a revised or combined concept
+  age_bands: [[18, 24], [25, 34], [35, 44], [45, 64], [65, 99]]
+  traits:                         # strongest personality domain -> plain-language group (high, low)
+    O: ["Curious, novelty-seeking", "Prefers the familiar"]
+    C: ["Planners and deliberators", "Spontaneous deciders"]
+    E: ["Social, high-energy", "Quieter, reserved"]
+    A: ["Trusting, warm", "Sceptical, guarded"]
+    N: ["Cautious, reassurance-seeking", "Calm, unworried"]
+
+measurement:                      # metrics that matter per objective (results form shows these first)
+  by_objective:                   # direct objectives score clicks/sign-ups/purchases per impression, so ask for impressions
+    awareness: [reach, impressions, completion_rate, shares, saves]
+    qualified inquiries: [impressions, clicks, replies, comments, signups]
+    registrations: [impressions, clicks, signups]
+    enrollment: [impressions, clicks, signups, purchases]
+    visits: [impressions, clicks, signups]
+    installations: [impressions, clicks, signups]
+    sales: [impressions, clicks, purchases, revenue, cost]
+    evidence of demand: [impressions, clicks, signups, comments]
+  min_results_for_rank: 3         # real results needed before comparing predicted and real ranking
+  rank_miss: 2                    # predicted vs real rank gap (at least) that counts as a miss

@@ -51,18 +51,18 @@
   <h1><img src="/favicon.png" alt="" width="24" height="24" style="vertical-align:-5px;margin-right:8px;border-radius:6px">MARK<span>STRAP</span> <span class="mono" style="color:var(--dim);font-weight:400">/ campaign engine</span></h1>
   <div class="goal" id="goal"></div>
   <span class="mono" id="term"></span>
+  <select id="switch" class="mono" style="max-width:220px"></select>
   <button id="run">Run generation</button>
   <button class="ghost" id="snap">Snapshot</button>
 </header>
 
-<form class="new" id="newForm" hidden>
+<div class="new" id="newForm" hidden>
   <pre id="ascii"></pre>
-  <h2>New campaign</h2>
-  <textarea name="goal" rows="2" placeholder="Goal, e.g. Make our cake shop in Indiranagar the go-to birthday order for college students" required></textarea>
-  <textarea name="market" rows="2" placeholder="Target market, e.g. Bangalore students 18–24, Instagram-heavy, price sensitive" required></textarea>
-  <select name="ad_type"><option value="direct">Direct response — sell now</option><option value="brand">Brand — shift minds</option></select>
-  <button>Seed population</button>
-</form>
+  <h2>Pick a campaign</h2>
+  <select id="pick"></select>
+  <p class="empty" id="pickNote">Campaigns are created in the app. This console shows the engine underneath one of them.</p>
+  <a href="/app"><button class="ghost" type="button">Open the app</button></a>
+</div>
 
 <main id="app" hidden>
   <div>
@@ -77,7 +77,7 @@
     <section><h2>Lessons · nurture</h2><div id="lessons"></div></section>
     <section><h2>Reality → audience memory</h2>
       <div style="display:flex;gap:8px;margin-bottom:10px">
-        <a href="/api/ads.csv"><button class="ghost" type="button">Shortlist CSV</button></a>
+        <a id="shortlist" href="#"><button class="ghost" type="button">Shortlist CSV</button></a>
         <label><button class="ghost" type="button" onclick="this.nextElementSibling.click()">Import results</button><input type="file" accept=".csv" id="csv" hidden></label>
       </div>
       <div id="memory"></div></section>
@@ -92,16 +92,32 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const api = (p, o) => fetch(p, o).then(async r => { if (!r.ok) throw new Error(await r.text()); return r.json(); });
 const COLORS = {share:"#4c8dff", engage:"#2b5fb8", ignore:"#1c2330", dislike:"#ff6b6b"};
-let S;
+let S, CID = new URLSearchParams(location.search).get("campaign"), B = "";
+
+async function pickCampaign() {
+  const list = await api("/api/campaigns");
+  const opts = list.map(c => `<option value="${esc(c.id)}">${esc(c.org)} · ${esc(c.name)}</option>`).join("");
+  $("pick").innerHTML = `<option value="">Choose…</option>${opts}`;
+  $("switch").innerHTML = opts;
+  if (!CID && list.length) CID = list[0].id;
+  if (CID) $("switch").value = CID;
+  $("pickNote").textContent = list.length ? "This console shows the engine underneath one campaign." : "No campaigns yet. Create one in the app.";
+  const go = id => { location.search = `?campaign=${encodeURIComponent(id)}`; };
+  $("pick").onchange = e => e.target.value && go(e.target.value);
+  $("switch").onchange = e => go(e.target.value);
+}
 
 async function load() {
-  S = await api("/api/state");
+  if (!CID) { $("newForm").hidden = false; $("app").hidden = true; $("run").disabled = true; return; }
+  B = `/api/campaigns/${encodeURIComponent(CID)}/engine`;
+  $("shortlist").href = `${B}/ads.csv`;
+  S = await api(B);
   const has = !!S.campaign;
   $("newForm").hidden = has; $("app").hidden = !has;
   $("run").disabled = !has || S.busy;
   $("run").textContent = S.busy ? "Evolving…" : "Run generation";
   if (!has) return;
-  $("goal").textContent = `${S.campaign.goal} — ${S.campaign.market} · ${S.campaign.ad_type}`;
+  $("goal").textContent = `${S.name} — ${S.campaign.goal} · ${S.campaign.ad_type}`;
   $("term").textContent = `TERM ${S.term}`;
   renderPop(); renderQueens(); renderDials(); renderAds(); renderSide();
   if (S.busy) setTimeout(load, 3000);
@@ -172,40 +188,34 @@ function tree(a) {
 document.addEventListener("click", async e => {
   const id = e.target.dataset?.id;
   if (!id) return;
-  const a = await api(`/api/lineage/${id}`);
+  const a = await api(`${B}/lineage/${id}`);
   $("dlgBody").innerHTML = `<h2>Lineage</h2><ul class="tree" style="border:0;padding:0">${tree(a)}</ul>
-    ${a.alive ? "" : `<button onclick="api('/api/revive/${a.id}',{method:'POST'}).then(()=>{$('dlg').close();load()})">Revive from archive</button>`}`;
+    ${a.alive ? "" : `<button onclick="api('${B}/revive/${a.id}',{method:'POST'}).then(()=>{$('dlg').close();load()})">Revive from archive</button>`}`;
   $("dlg").showModal();
 });
 
 document.addEventListener("change", async e => {
   const k = e.target.dataset?.dial;
   if (!k) return;
-  await api("/api/dial", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name:k, value:+e.target.value})});
+  await api(`${B}/dial`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name:k, value:+e.target.value})});
   load();
 });
 
 $("run").onclick = async () => {
   $("run").disabled = true; $("run").textContent = "Evolving…";
-  const p = api("/api/generation", {method:"POST"}).catch(err => alert(err.message));
+  const p = api(`${B}/generation`, {method:"POST"}).catch(err => alert(err.message));
   setTimeout(load, 1000); await p; load();
 };
-$("snap").onclick = async () => { const r = await api("/api/snapshot", {method:"POST"}); $("snap").textContent = `Saved ${r.id}`; };
+$("snap").onclick = async () => { const r = await api(`${B}/snapshot`, {method:"POST"}); $("snap").textContent = `Saved ${r.id}`; };
 $("csv").onchange = async e => {
   const fd = new FormData(); fd.append("file", e.target.files[0]);
-  await api("/api/results", {method:"POST", body:fd}); load();
+  await api(`/api/campaigns/${encodeURIComponent(CID)}/results`, {method:"POST", body:fd}); load();
 };
-$("newForm").onsubmit = async e => {
-  e.preventDefault();
-  const f = Object.fromEntries(new FormData(e.target));
-  e.target.querySelector("button").textContent = "Seeding audience…";
-  await api("/api/campaign", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(f)});
-  load();
-};
+
 
 // ASCII strings: human direction above, agent execution below
 $("ascii").textContent = Array.from({length:7}, (_, y) => Array.from({length:72}, (_, x) => ((x * 7 + y * 13) % 11 === 0 ? "│" : (x + y) % 9 === 0 ? "·" : " ")).join("")).join("\n");
-load();
+pickCampaign().then(load);
 </script>
 </body>
 </html>

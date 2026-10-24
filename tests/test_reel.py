@@ -215,51 +215,62 @@ def test_compose_renders_a_tiny_reel(tmp_path):
 # ---------- API ----------
 
 def test_api_reel_flow(env, monkeypatch, tmp_path):
-    con, _, calls = env
-    monkeypatch.setattr(db, "DB_PATH", tmp_path / "api.db")
+    _, _, calls = env
     from fastapi.testclient import TestClient
-    from engine import api
-    monkeypatch.setattr(api, "con", con)
+    from engine import agency, api, hub
+    hub.init(tmp_path / "agency.db")
+    o = agency.create_org(hub.A, "Midnight Crumb")
+    cid = agency.create_campaign(hub.A, o["id"], "Cakes")["id"]
+    con = agency.engine_con(hub.A, cid)
+    db.put(con, "campaign", DEMO["campaign"])
     con.execute("INSERT INTO ads (id, content) VALUES (?,?)", ("ad9", json.dumps(DEMO["ad"]["content"])))
     con.commit()
     c = TestClient(api.app)
-    assert c.post("/api/ads/missing/reel").status_code == 404
-    r = c.post("/api/ads/ad9/reel").json()
+    base = f"/api/campaigns/{cid}"
+    assert c.post(f"{base}/concepts/missing/reel").status_code == 404
+    assert c.post(f"{base}/concepts/ad9/reel").status_code == 400  # approve the concept first
+    c.post(f"{base}/concepts/ad9/decision", json={"status": "approved"})
+    r = c.post(f"{base}/concepts/ad9/reel").json()
     rid = r["id"]
-    assert r["brief"]["platform"] == "instagram_reels" and r["status"] == "draft"
-    assert c.patch(f"/api/reels/{rid}/brief", json={"durationSeconds": 500}).status_code == 400
-    assert c.patch(f"/api/reels/{rid}/brief", json={"durationSeconds": 15, "cta": "Order now"}).json()["brief"]["cta"] == "Order now"
-    up = c.post(f"/api/reels/{rid}/assets", data={"role": "product", "note": "box"},
+    assert r["brief"]["platform"] == "instagram_reels" and r["status"] == "draft" and r["capabilities"]["notes"]
+    assert c.post(f"{base}/concepts/ad9/reel").json()["id"] == rid  # one Reel per concept
+    assert c.patch(f"{base}/reels/{rid}/brief", json={"durationSeconds": 500}).status_code == 400
+    assert c.patch(f"{base}/reels/{rid}/brief", json={"voice": "maybe"}).status_code == 400
+    assert c.patch(f"{base}/reels/{rid}/brief", json={"durationSeconds": 15, "cta": "Order now"}).json()["brief"]["cta"] == "Order now"
+    up = c.post(f"{base}/reels/{rid}/assets", data={"role": "product", "note": "box"},
                 files={"file": ("box.png", png(), "image/png")})
     assert up.status_code == 200 and up.json()["assets"][0]["role"] == "product"
-    assert c.post(f"/api/reels/{rid}/assets", files={"file": ("x.exe", b"MZ")}).status_code == 400
+    assert c.post(f"{base}/reels/{rid}/assets", files={"file": ("x.exe", b"MZ")}).status_code == 400
 
     def wait():
         for _ in range(200):
-            v = c.get(f"/api/reels/{rid}").json()
+            v = c.get(f"{base}/reels/{rid}").json()
             if not v["busy"]:
                 return v
             time.sleep(0.05)
         raise AssertionError("reel stayed busy")
-    c.post(f"/api/reels/{rid}/storyboard")
+    c.post(f"{base}/reels/{rid}/storyboard")
     v = wait()
     assert v["status"] == "storyboard", (v["status"], v["error"])
     assert v["spec"]["durationSeconds"] == 15
     sid = v["scenes"][1]["id"]
-    assert c.put(f"/api/reels/{rid}/scenes/{sid}", json={"assetType": "hologram"}).status_code == 400
-    ok = c.put(f"/api/reels/{rid}/scenes/{sid}", json={"onScreenText": "New line"}).json()
+    assert c.put(f"{base}/reels/{rid}/scenes/{sid}", json={"assetType": "hologram"}).status_code == 400
+    ok = c.put(f"{base}/reels/{rid}/scenes/{sid}", json={"onScreenText": "New line"}).json()
     assert ok["scenes"][1]["onScreenText"] == "New line"
-    c.post(f"/api/reels/{rid}/produce")
+    c.post(f"{base}/reels/{rid}/produce")
     assert wait()["status"] == "produced"
-    assert c.get(f"/reels/{rid}/preview.mp4").status_code == 200
-    assert c.get(f"/reels/{rid}/..%2F..%2Fengine.db").status_code == 404
-    rep = c.post(f"/api/reels/{rid}/scenes/{sid}/replace", files={"file": ("new.png", png((1, 2, 3)), "image/png")})
+    assert c.get(f"/campaigns/{cid}/reels/{rid}/preview.mp4").status_code == 200
+    assert c.get(f"/campaigns/{cid}/reels/{rid}/..%2F..%2Fengine.db").status_code == 404
+    rep = c.post(f"{base}/reels/{rid}/scenes/{sid}/replace", files={"file": ("new.png", png((1, 2, 3)), "image/png")})
     assert rep.status_code == 200
     v = wait()
     assert next(s for s in v["scenes"] if s["id"] == sid)["state"]["asset"]["provider"] == "upload"
-    c.post(f"/api/reels/{rid}/export")
+    assert c.post(f"{base}/reels/{rid}/approve", json={"approved": True}).status_code == 400  # export first
+    c.post(f"{base}/reels/{rid}/export")
     assert wait()["renders"]["final"] == "final.mp4"
-    assert any(x["id"] == rid for x in c.get("/api/state").json()["reels"])
+    assert c.post(f"{base}/reels/{rid}/approve", json={"approved": True}).json()["approved"]
+    assert c.get(f"{base}/launch").json()["items"][0]["reel"]["approved"]
+    assert any(x["id"] == rid for x in c.get(base).json()["reels"])
 
 
 # ---------- visual review ----------
@@ -339,4 +350,4 @@ def test_voice_follows_language_and_direction():
     assert reel.voice_for(spec, {"language": "English"}) == ("am_michael", reel.CFG["voice_speed_fast"], "en-us")
     spec["voiceover"]["voiceDirection"] = "warm, calm"
     assert reel.voice_for(spec, {"language": "Hindi"}) == ("hf_alpha", reel.CFG["voice_speed_calm"], "hi")
-    assert reel.voice_for(spec, {"voice": "bf_lily"})[0] == "bf_lily"
+    assert reel.voice_for(spec, {"speaker": "bf_lily", "voice": "on"})[0] == "bf_lily"

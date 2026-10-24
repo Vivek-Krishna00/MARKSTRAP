@@ -3,26 +3,18 @@ import io
 import json
 import re
 from html.parser import HTMLParser
-from pathlib import Path
 
 import httpx
 
 from . import llm
 
-ORG = Path("data/org.json")  # organization materials are reused across campaigns
 OBJECTIVES = {  # objective -> locked ad type
     "awareness": "brand", "qualified inquiries": "direct", "registrations": "direct", "enrollment": "direct",
     "visits": "direct", "installations": "direct", "sales": "direct", "evidence of demand": "direct",
 }
-
-
-def load_org():
-    return json.loads(ORG.read_text()) if ORG.exists() else {"materials": []}
-
-
-def save_org(org):
-    ORG.parent.mkdir(parents=True, exist_ok=True)
-    ORG.write_text(json.dumps(org, indent=1))
+BRIEF_FIELDS = ["objective", "audience", "insight", "offer", "main_message", "evidence", "action",
+                "platforms_formats", "creative_direction", "brand_requirements", "restrictions", "success_metric"]
+LIST_FIELDS = ("evidence", "missing", "assumptions")
 
 
 class _Text(HTMLParser):
@@ -61,28 +53,65 @@ def read_file(name: str, data: bytes) -> str:
     return f"[{name}: image/footage asset available for creative use]"
 
 
-def extract(objective: str, constraints: dict) -> dict:
-    org = load_org()
-    mats = "\n\n".join(f"### {m['name']}\n{m['text']}" for m in org["materials"])[:20000]
-    return llm.chat_json(
-        "You are a senior strategist at a marketing agency reading a client's materials. The client is an expert; "
-        "organise what they gave you, never lecture. Ask only for details that block a campaign.",
-        f"Materials:\n{mats}\n\nObjective: {objective}\nConstraints: {json.dumps(constraints)}\n"
-        'Return {"offering": str, "available": "built|unbuilt", "audience": str (who and where), '
-        '"goal": str (one sentence, measurable), "key_messages": [str], "proof_points": [str], '
-        '"destination": str (where people should land: store/booking/admissions/visitor info/early-access page), '
-        '"success_metric": str, "missing": [str] (max 3 critical questions, empty if none)}', temperature=0.3)
+def extract(profile: str, product: str, fields: dict, materials: str = "") -> dict:
+    """Campaign brief from the approved organization profile, the approved product and the campaign form.
+    Only approved research reaches this prompt; the organization's own materials are their own words."""
+    b = llm.chat_json(
+        "You are a senior strategist at a marketing agency writing a campaign brief. The client is the expert; "
+        "organise what they gave you, never lecture, never invent facts. Anything not supported by the inputs is an "
+        "assumption and must be listed as one. Ask only for details that truly block the campaign.",
+        f"Organization profile (approved):\n{profile}\n\nProduct or service (approved):\n{product}\n\n"
+        f"Campaign requirements from the client:\n{json.dumps(fields)}\n\n"
+        f"Organization materials:\n{materials[:15000] or 'none'}\n\n"
+        'Return {"objective": str, "audience": str (who and where), "insight": str (the customer truth the '
+        'campaign rests on), "offer": str, "main_message": str (one sentence), "evidence": [str] (only facts '
+        'present in the inputs), "action": str (what people should do and where they land), '
+        '"platforms_formats": str, "creative_direction": str, "brand_requirements": str, "restrictions": str '
+        '(claims and content that must not appear), "success_metric": str (measurable), '
+        '"basis": {"<field>": "organization|product|campaign|assumption"}, '
+        '"assumptions": [str], "missing": [str] (max 3, only true blockers, empty if none)}', temperature=0.3)
+    for k in LIST_FIELDS:
+        b[k] = [str(x) for x in (b.get(k) or []) if str(x).strip()]
+    b["missing"] = b["missing"][:3]
+    return b
 
 
-def next_experiment(campaign: dict, ads: list[dict]) -> dict:
+def engine_brief(b: dict, fields: dict) -> dict:
+    """The confirmed brief plus the keys the engine and the Reel Director already read."""
+    required = [m.strip() for m in str(fields.get("required_messages") or "").split("\n") if m.strip()]
+    return {**b, "offering": b.get("offer", ""), "goal": fields.get("goal") or b.get("success_metric", ""),
+            "key_messages": [m for m in [b.get("main_message", "")] + required if m],
+            "proof_points": b.get("evidence", []), "destination": fields.get("destination") or b.get("action", ""),
+            "available": "built"}
+
+
+def constraints(fields: dict, b: dict) -> dict:
+    """Hard rules every concept must follow, taken from the campaign form and the confirmed brief."""
+    return {k: v for k, v in {
+        "language": fields.get("language", ""), "geography": fields.get("market", ""),
+        "budget": fields.get("budget", ""), "start": fields.get("start", ""), "end": fields.get("end", ""),
+        "required": fields.get("required_messages", ""), "tone": fields.get("tone", ""),
+        "brand_rules": " ".join(x for x in (fields.get("brand_rules", ""), b.get("brand_requirements", "")) if x),
+        "restricted_claims": " ".join(x for x in (fields.get("prohibited_claims", ""), b.get("restrictions", ""))
+                                      if x),
+        "platforms": fields.get("platforms", ""), "format": fields.get("format", ""),
+    }.items() if v}
+
+
+def next_experiment(campaign: dict, ads: list[dict], comparison: dict | None = None) -> dict:
     tested = [{"headline": a["content"].get("headline"), "visual": a["content"].get("visual"),
-               "platform": a["content"].get("platform"), "style": a["style"], "real_score": a["real_score"],
+               "platform": a["content"].get("platform"), "approach": a["style"], "real_score": a["real_score"],
                "sim_score": a["sim_score"]} for a in ads]
-    return llm.chat_json(
+    out = llm.chat_json(
         "You are a performance marketing lead reviewing a live experiment. Be specific and practical. "
-        "A weak creative is not proof the offering has no market; say what the evidence does and does not show.",
+        "A weak creative is not proof the offering has no market; say what the evidence does and does not show. "
+        "Recommend ONE focused next experiment that changes a single thing, so its result can be read.",
         f"Campaign: {json.dumps(campaign)}\nTested ads with real scores (z vs campaign baseline) and simulation "
-        f"scores:\n{json.dumps(tested)}\n"
-        'Return {"what_worked": [str], "what_didnt": [str], "caution": str, '
-        '"next": {"hypothesis": str, "change": str, "audience": str, "channel": str, "success_metric": str}}',
+        f"scores:\n{json.dumps(tested)}\nSimulation vs reality, computed: {json.dumps(comparison or {})}\n"
+        'Return {"what_worked": [str], "what_didnt": [str], "not_proven": [str], "caution": str, '
+        '"next": {"hypothesis": str, "change": str (the single change to test), "audience": str, "channel": str, '
+        '"success_metric": str, "keep_same": [str] (what must stay unchanged)}}',
         temperature=0.4)
+    out.setdefault("not_proven", [])
+    out.setdefault("next", {}).setdefault("keep_same", [])
+    return out
