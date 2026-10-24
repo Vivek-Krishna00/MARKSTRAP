@@ -313,3 +313,18 @@ def test_app_never_shows_engine_jargon():
     for f in SITE_APP.rglob("*.js*"):
         for n, line in enumerate(f.read_text().splitlines(), 1):
             assert not bad.search(line), f"{f.name}:{n}: {line.strip()[:80]}"
+
+
+def test_concurrent_first_requests_bind_each_campaign_to_its_own_file(client, tmp_path):
+    """After a restart, parallel first requests once bound a campaign to the default engine file."""
+    from concurrent.futures import ThreadPoolExecutor
+    o = agency.create_org(hub.A, "Org")
+    cids = [agency.create_campaign(hub.A, o["id"], f"c{i}")["id"] for i in range(4)]
+    hub.init(tmp_path / "agency.db")  # like a restart: no cached connections
+    urls = [f"/api/campaigns/{c}{s}" for c in cids for s in ("", "/launch", "/reality", "/engine")] * 5
+    with ThreadPoolExecutor(16) as ex:
+        codes = list(ex.map(lambda u: client.get(u).status_code, urls))
+    assert set(codes) == {200}
+    for cid in cids:
+        path = agency.engine_con(hub.A, cid).execute("PRAGMA database_list").fetchone()[2]
+        assert path.endswith(f"{cid}.db")

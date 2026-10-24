@@ -250,7 +250,7 @@ def prefill(ad: dict, campaign: dict) -> dict:
         "brandVoice": k.get("brand_rules") or "warm, specific, no hype",
         "language": k.get("language") or "English",
         "colors": colors[:4], "fonts": ["Manrope"],
-        "cta": b.get("destination") or "Link in bio",
+        "cta": b.get("action") or b.get("destination") or "Link in bio",  # a sentence reads better on screen than a URL
         "mustNot": k.get("restricted_claims") or "",
         "notes": "",
         "voice": "on", "captions": "on", "voiceStyle": "", "musicDirection": "",

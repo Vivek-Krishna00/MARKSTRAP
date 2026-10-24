@@ -30,7 +30,8 @@ def approach_label(style: str) -> dict:
 
 
 def _words(c: dict) -> set:
-    text = " ".join(str(c.get(k, "")) for k in ("concept_name", "main_idea", "headline", "body"))
+    # The idea, not the caption: captions repeat the same offer and would make every concept look alike.
+    text = " ".join(str(c.get(k, "")) for k in ("concept_name", "main_idea", "headline"))
     return {w for w in re.findall(r"[a-z0-9']+", text.lower()) if len(w) > 3 and w not in STOP}
 
 
@@ -52,7 +53,7 @@ def distinct(ads: list[dict], decisions: dict, n: int | None = None) -> list[dic
         if decisions.get(a["id"]) not in ("approved", "saved", "revise"):
             for g in groups:
                 o = overlap(a["content"], g["lead"]["content"])
-                if o >= th or (a["style"] == g["lead"]["style"] and o >= th / 2):
+                if o >= th or (a["style"] == g["lead"]["style"] and o >= CFG["same_approach_threshold"]):
                     home = g
                     break
         if home:

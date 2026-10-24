@@ -53,13 +53,14 @@ def compare(con) -> dict:
     sims, reals = [a["sim_score"] or 0 for a in tested], [a["real_score"] for a in tested]
     sr, rr = _ranks(sims), _ranks(reals)
     n = len(tested)
+    gap = max(CFG["rank_miss"], n // 3)  # how far apart predicted and real rank must be to call it a miss
     per = []
     for a, ps, pr in zip(tested, sr, rr):
         if n < need:
             verdict = "Too few results to judge"
-        elif pr - ps >= max(1, n // 3):
+        elif pr - ps >= gap:
             verdict = "Simulation overrated it"
-        elif ps - pr >= max(1, n // 3):
+        elif ps - pr >= gap:
             verdict = "Simulation underrated it"
         else:
             verdict = "Roughly as predicted"

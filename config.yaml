@@ -121,7 +121,8 @@ research:                         # engine/research.py: runs only after the user
 
 concepts:                         # engine/concepts.py: how concepts are shown and reviewed
   shown: 6                        # distinct concepts on the review screen
-  dup_threshold: 0.6              # word overlap at which two ads count as one idea (folded into variations)
+  dup_threshold: 0.6              # word overlap (name, idea, headline) at which two ads count as one idea
+  same_approach_threshold: 0.45   # lower bar when both ads also share the same creative approach
   group_margin: 0.1               # a group responds positively/negatively when its mean differs by this
   min_group_size: 2               # smaller groups are not reported
   confident_sample: 30            # reactions needed before simulated confidence reads "moderate"
@@ -136,13 +137,14 @@ concepts:                         # engine/concepts.py: how concepts are shown a
     N: ["Cautious, reassurance-seeking", "Calm, unworried"]
 
 measurement:                      # metrics that matter per objective (results form shows these first)
-  by_objective:
+  by_objective:                   # direct objectives score clicks/sign-ups/purchases per impression, so ask for impressions
     awareness: [reach, impressions, completion_rate, shares, saves]
-    qualified inquiries: [clicks, replies, comments, signups]
-    registrations: [clicks, signups]
-    enrollment: [clicks, signups, purchases]
-    visits: [clicks, signups]
-    installations: [clicks, signups]
-    sales: [clicks, purchases, revenue, cost]
-    evidence of demand: [clicks, signups, comments]
+    qualified inquiries: [impressions, clicks, replies, comments, signups]
+    registrations: [impressions, clicks, signups]
+    enrollment: [impressions, clicks, signups, purchases]
+    visits: [impressions, clicks, signups]
+    installations: [impressions, clicks, signups]
+    sales: [impressions, clicks, purchases, revenue, cost]
+    evidence of demand: [impressions, clicks, signups, comments]
   min_results_for_rank: 3         # real results needed before comparing predicted and real ranking
+  rank_miss: 2                    # predicted vs real rank gap (at least) that counts as a miss

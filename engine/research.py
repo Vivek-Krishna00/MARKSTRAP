@@ -19,7 +19,8 @@ import httpx
 from . import agency, evolve, llm
 
 CFG = evolve.CFG["research"]
-UA = {"User-Agent": "MarkStrap/0.2 (marketing research; contact via the organization)"}
+# Wikimedia refuses agents without a contact URL (meta.wikimedia.org/wiki/User-Agent_policy).
+UA = {"User-Agent": "MarkStrap/0.2 (https://github.com/Vivek-Krishna00/MARKSTRAP; open-source marketing research)"}
 SKIP = ("script", "style", "noscript", "svg", "nav", "footer")
 
 
@@ -30,7 +31,7 @@ class _Page(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         self.skip += tag in SKIP
-        self._in_title = tag == "title"
+        self._in_title = tag == "title" and not self.skip and not self.title  # the page title, not an SVG's
         if tag == "a":
             href = dict(attrs).get("href")
             if href:
@@ -107,14 +108,17 @@ def crawl(url: str, max_pages: int) -> list[dict]:
 
 def wikipedia(name: str) -> dict | None:
     base = "https://en.wikipedia.org/w/api.php"
-    hits = httpx.get(base, params={"action": "opensearch", "search": name, "limit": 1, "format": "json"},
-                     timeout=CFG["timeout_s"], headers=UA).json()
+    r = httpx.get(base, params={"action": "opensearch", "search": name, "limit": 1, "format": "json"},
+                  timeout=CFG["timeout_s"], headers=UA)
+    r.raise_for_status()
+    hits = r.json()
     if not hits or len(hits) < 2 or not hits[1]:
         return None
     title = hits[1][0]
-    pages = httpx.get(base, params={"action": "query", "prop": "extracts", "explaintext": 1, "titles": title,
-                                    "format": "json", "redirects": 1},
-                      timeout=CFG["timeout_s"], headers=UA).json()["query"]["pages"]
+    r = httpx.get(base, params={"action": "query", "prop": "extracts", "explaintext": 1, "titles": title,
+                                "format": "json", "redirects": 1}, timeout=CFG["timeout_s"], headers=UA)
+    r.raise_for_status()
+    pages = r.json()["query"]["pages"]
     text = next(iter(pages.values())).get("extract", "")
     if not text:
         return None

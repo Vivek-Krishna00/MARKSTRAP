@@ -65,12 +65,7 @@ def path_of(path=None) -> Path:
 
 
 def connect(path=None):
-    p = path_of(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(p, check_same_thread=False)
-    con.row_factory = sqlite3.Row
-    con.executescript(SCHEMA)
-    return con
+    return db.open_locked(path_of(path), SCHEMA)
 
 
 def campaign_dir(a) -> Path:
@@ -336,7 +331,7 @@ def product_text(p: dict | None) -> str:
 
 # ---------- campaigns ----------
 
-_cons: dict[str, sqlite3.Connection] = {}
+_cons: dict = {}
 
 
 def create_campaign(a, org_id, name, product_id=None, fields=None, field_sources=None, db_file=None) -> dict:
@@ -405,10 +400,13 @@ def update_campaign(a, cid, **f) -> dict:
     return campaign(a, cid)
 
 
-def engine_con(a, cid) -> sqlite3.Connection:
+def engine_con(a, cid):
     with _lock:
         if cid not in _cons:
-            _cons[cid] = db.connect(campaign(a, cid)["db_file"])
+            path = campaign(a, cid)["db_file"]
+            if not path:  # never fall back to the default engine file: that would mix campaigns
+                raise RuntimeError(f"campaign {cid} has no database file")
+            _cons[cid] = db.connect(path)
         return _cons[cid]
 
 

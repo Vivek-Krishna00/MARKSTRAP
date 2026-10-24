@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import sqlite3
+import threading
 import time
 from pathlib import Path
 
@@ -31,13 +32,61 @@ CREATE TABLE IF NOT EXISTS reel_assets (id TEXT PRIMARY KEY, reel_id TEXT, role 
 """
 
 
-def connect(path=None):
-    path = Path(path or DB_PATH)
+class Rows(list):
+    """A query result read in full while the connection was locked."""
+    def fetchone(self):
+        return self[0] if self else None
+
+    def fetchall(self):
+        return list(self)
+
+
+class Locked:
+    """One SQLite connection shared by request threads and background jobs. Every call holds a lock and reads
+    its rows completely, so two threads can never interleave on the same connection (that once returned a
+    garbled row and bound a campaign to the wrong database file)."""
+
+    def __init__(self, con):
+        self._con, self._lock = con, threading.RLock()
+
+    def execute(self, sql, args=()):
+        with self._lock:
+            return Rows(self._con.execute(sql, args).fetchall())
+
+    def executemany(self, sql, rows):
+        with self._lock:
+            self._con.executemany(sql, rows)
+
+    def executescript(self, sql):
+        with self._lock:
+            self._con.executescript(sql)
+
+    def commit(self):
+        with self._lock:
+            self._con.commit()
+
+    def close(self):
+        with self._lock:
+            self._con.close()
+
+    def __enter__(self):
+        self._lock.acquire()
+        return self
+
+    def __exit__(self, *exc):
+        self._lock.release()
+
+
+def open_locked(path: Path, schema: str) -> Locked:
     path.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(path, check_same_thread=False)
     con.row_factory = sqlite3.Row
-    con.executescript(SCHEMA)
-    return con
+    con.executescript(schema)
+    return Locked(con)
+
+
+def connect(path=None):
+    return open_locked(Path(path or DB_PATH), SCHEMA)
 
 
 def get(con, k, default=None):
