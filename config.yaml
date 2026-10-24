@@ -14,6 +14,7 @@ dials:
   queen_poor_terms: 2             # consecutive below-median terms before a queen is culled
   early_velocity_weight: 0.3
   outlier_clip: 3.0               # clip normalised real scores to +/- this
+  oasis_rounds: 3                 # feed rounds per term when AUDIENCE_BACKEND=oasis
 
 breeds:
   copywriter:
@@ -43,3 +44,34 @@ platforms:
   x: {replies: [1.0, impressions], reposts: [1.0, impressions]}
   linkedin: {comments: [1.0, impressions], shares: [1.0, impressions]}
   direct: {clicks: [0.5, impressions], signups: [1.0, impressions], purchases: [2.0, impressions]}
+
+# Personality (engine/personality.py). Tags: [V] from evidence, [D] direction only / magnitude is a free default,
+# [U] no usable evidence. Ledger IDs P# in docs/research/personality_ledger.md; table in docs/PARAMETERS.md.
+personality:
+  seed: markstrap                 # salt for every sha256 draw
+  h2: 0.40                        # [V] P1  heritable share of facet variance at ref_age
+  ref_age: 30                     # [U]     age at which variance splits exactly h2 / 1-h2
+  shared_env_var: 0.0             # [V] P3  shared family environment ~0; kept off
+  env_variance_curve:             # [D] P2  cumulative nonshared variance, relative to ref_age; concave shape is [U]
+    - [0, 0.20]
+    - [10, 0.50]
+    - [20, 0.80]
+    - [30, 1.00]
+    - [50, 1.25]
+    - [80, 1.45]
+  maturation:                     # [D] P4  N down, A and C up, mostly 20-40; z-unit magnitudes are [U]
+    N: [[20, 0.0], [40, -0.25], [80, -0.30]]
+    A: [[20, 0.0], [40, 0.20], [80, 0.30]]
+    C: [[20, 0.0], [40, 0.25], [80, 0.30]]
+  disinhibition_weights: {N5: 1, E5: 1, C5: -1, C6: -1, C3: -1}   # [U] owner to confirm
+  delta_clamp: 0.10               # [U] P6 P7  max |z| change per trait-change event
+  delta_age_window: [[0, 1.0], [100, 1.0]]                        # [D] P6 multiplier by age; flat default
+  delta_reversion_halflife: null  # [U] years; null = permanent
+  origin_offsets: {}              # [U] P9 culture/attachment/role tables; empty = zero, never invented
+
+oasis:                            # MiroFish/OASIS audience (audience/), AUDIENCE_BACKEND=oasis
+  activity_from_E4: [0.6, 1.0]    # [U] activity_level range, mapped from the Activity facet (E4) percentile
+  timeout_s: 900                  # one term's feed must finish within this
+
+audience:
+  age_range: [18, 45]             # [U] ages sampled uniformly for simulated people

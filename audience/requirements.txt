@@ -1,0 +1,6 @@
+# MiroFish backend dependencies (backend/requirements.txt), minus zep-cloud (not open source) and flask/PDF/UI deps.
+camel-oasis==0.2.5
+camel-ai==0.2.78
+openai>=1.0.0
+python-dotenv>=1.0.0
+mcp==1.24.0       # as in MiroFish's uv.lock; mcp 2.x removed FastMCP, which camel-ai 0.2.78 imports

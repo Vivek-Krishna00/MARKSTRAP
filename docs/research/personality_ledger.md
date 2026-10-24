@@ -1,0 +1,23 @@
+# Personality evidence ledger
+
+Copied verbatim from the personality-module brief; P10 added during implementation.
+
+Status note: these entries come from an earlier research-agent literature review in this project. Unless stated, they are UNCHECKED, meaning we have not independently confirmed each paper's conclusion against its text. Research reports in this project have had wrong tags and wrong attributions several times, so spot-check a number before any magnitude depends on it. The model uses mostly directions and ordering, so it is robust to errors in magnitudes.
+
+| ID | Finding | Source | Status |
+|---|---|---|---|
+| P1 | Heritability of personality about 0.40 (134 studies), remaining about 0.60 environmental, mostly nonshared | Vukasovic and Bratko 2015, Psychological Bulletin 141(4):769-785, doi 10.1037/bul0000017 | UNCHECKED |
+| P1b | Twin-based heritability across human traits averages about 49% | Polderman et al. 2015, Nature Genetics 47:702-709, doi 10.1038/ng.3285 | UNCHECKED |
+| P1c | DNA-variant (SNP) heritability is much lower than twin heritability ("missing heritability"): about 4.8 to 9.3% per trait in the largest Big Five GWAS; about 4 to 7% in another large sample; earlier work found only neuroticism about 15% and openness about 21% | Schwaba et al. 2026 (Nature, doi 10.1038/s41586-026-10992-9); Gupta et al. 2024 (doi 10.1038/s41562-024-01951-3); Power and Pluess 2015 (doi 10.1038/tp.2015.96) | UNCHECKED. Use twin h2 = 0.40 as the model target; do not use SNP figures as the simulated heritability. |
+| P2 | Childhood personality stability is mainly genetic; in adulthood environmental factors increasingly drive stability; relative importance of life experience for individual differences grows across the lifespan | Briley and Tucker-Drob 2014, doi 10.1037/a0037091; Kandler et al. 2021, doi 10.1037/pspp0000366 | UNCHECKED, direction only |
+| P3 | Nonshared environment is large; measured specific nonshared factors each explain very little; shared family environment explains very little of personality | Turkheimer and Waldron 2000, doi 10.1037/0033-2909.126.1.78; Plomin and Daniels 1987, doi 10.1017/S0140525X00055941 | UNCHECKED |
+| P4 | Maturity principle: across 92 longitudinal samples people become more conscientious, agreeable and emotionally stable with age, especially between 20 and 40 | Roberts, Walton and Viechtbauer 2006, doi 10.1037/0033-2909.132.1.1 | UNCHECKED, direction only. No magnitudes used. |
+| P5 | Consensus review: traits change across the lifespan; individual differences in change are largest in young adulthood; specific life-event effects are notoriously hard to replicate | Bleidorn et al. 2021, Personality Science 2:e6009, doi 10.5964/ps.6009 | UNCHECKED |
+| P6 | Life events: effects on personality are small and heterogeneous; most consistent effects in young adulthood (first romantic relationship, first job) | Bleidorn, Hopwood and Lucas 2018, doi 10.1111/jopy.12286 | UNCHECKED |
+| P7 | Preregistered meta-analysis of 10 life events: effects generally small and heterogeneous; coordinated multi-panel analysis confirms modest effects that often fail to replicate | Buhler et al. 2024, doi 10.1177/08902070231190219; Haehner et al. 2026, doi 10.1177/08902070251356148 | UNCHECKED |
+| P8 | Mental-illness report claim (not used here): severe episodes leave persistent personality changes (higher neuroticism, lower extraversion). Out of scope for this module. | HiTOP-based architecture report from the earlier mental-illness research round | UNCHECKED; reports of this kind were flawed in this project |
+| P9 | Origin-context effects (culture, attachment, family): no verified effect sizes available. Treated as zero by default. | n/a | NOT FOUND |
+| P10 | Two higher-order factors above the Big Five: Stability (emotional stability, agreeableness, conscientiousness) and Plasticity (extraversion, openness) | DeYoung, Peterson and Higgins 2002, Personality and Individual Differences 33(4):533-552, doi 10.1016/S0191-8869(01)00171-4 | UNCHECKED; used for grouping only, no weights |
+| D1 | Facet correlation matrix and raw-score marginals for the 30 IPIP-NEO-120 facets, fitted as a Gaussian copula on 271,547 adults | `engine/data/profile_population_v1_model.json`, from github.com/KanishkRanjan/developmental-agent-simulator (no licence stated; confirm with the author) | DATA. Replaces the brief's "[U] facet intercorrelation" |
+
+Not found and therefore [U] or omitted: facet-level maturation magnitudes; facet-to-metatrait weights, especially for Disinhibition; cultural, attachment and role offsets; persistence of life-event-driven trait changes; rank-order stability magnitudes by age band (use direction only; the model will not hardcode them).

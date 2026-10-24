@@ -172,3 +172,70 @@ def test_agency_flow_end_to_end(tmp_path, monkeypatch):
     assert c.post(f"/api/ads/{ad}/render").json()["url"] == f"/renders/{ad}.png"
     assert c.get(f"/renders/{ad}.png").content == b"\x89PNG fake"
     assert ad in c.get("/api/state").json()["renders"]
+
+
+def test_oasis_feed_path_scores_with_existing_vocabulary(con, monkeypatch):
+    from engine import audience
+    seen = {}
+
+    def fake_evaluate(ads, people, lessons, rounds, workdir=None):
+        seen.update(n=len(ads), people=len(people), rounds=rounds)
+        first = next(iter(ads))
+        return {a: {"reactions": [{"persona": "p", "reaction": "share" if a == first else "ignore"}] * 3,
+                    "counts": {}} for a in ads}
+
+    monkeypatch.setattr(audience, "enabled", lambda: True)
+    monkeypatch.setattr(audience, "evaluate", fake_evaluate)
+    evolve.run_generation(con)
+    ads = [db.row(r) for r in con.execute("SELECT * FROM ads ORDER BY sim_score DESC")]
+    assert seen == {"n": len(ads), "people": evolve.dials(con)["audience_size"], "rounds": evolve.dials(con)["oasis_rounds"]}
+    assert ads[0]["sim_score"] == 1.0 and ads[0]["shortlisted"]           # (1 + 0.5) / 1.5
+    assert all(a["sim_score"] <= 1 / 3 + 1e-9 for a in ads[1:])             # ignored = neutral (less if bored)
+
+
+def test_makers_never_see_audience_personas_or_scoring(con, monkeypatch):
+    prompts = []
+
+    def spy(system, user, temperature=0.8):
+        if "creative team" in system or "breed instructions" in system:
+            prompts.append(system + user)
+        return fake_llm(system, user, temperature)
+
+    monkeypatch.setattr(llm, "chat_json", spy)
+    evolve.run_generation(con)
+    people = db.get(con, "personas")
+    secret = {t for p in people for t in p["tendencies"]} | {"Strong tendency", "Somewhat inclined", "reaction"}
+    assert prompts and not any(s in p for p in prompts for s in secret)
+
+
+def test_feed_reader_maps_oasis_actions_to_reactions(tmp_path):
+    import sqlite3
+    import sys
+    sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent / "audience"))
+    import feed
+    d = sqlite3.connect(tmp_path / "t.db")
+    d.executescript("""
+      CREATE TABLE user (user_id INTEGER, agent_id INTEGER, name TEXT);
+      CREATE TABLE post (post_id INTEGER, user_id INTEGER, original_post_id INTEGER, quote_content TEXT);
+      CREATE TABLE trace (user_id INTEGER, action TEXT, info TEXT);
+      CREATE TABLE "like" (post_id INTEGER, user_id INTEGER);
+      CREATE TABLE dislike (post_id INTEGER, user_id INTEGER);
+      CREATE TABLE comment (post_id INTEGER, user_id INTEGER, content TEXT);
+      CREATE TABLE follow (follower_id INTEGER, followee_id INTEGER);
+      CREATE TABLE mute (muter_id INTEGER, mutee_id INTEGER);
+      INSERT INTO user VALUES (1,0,'brand0'),(2,1,'brand1'),(3,2,'user0'),(4,3,'user1'),(5,4,'user2');
+      INSERT INTO post VALUES (10,1,NULL,NULL),(11,2,NULL,NULL),(12,3,10,NULL),(13,5,11,'lol no');
+      INSERT INTO trace VALUES (3,'refresh','{"posts":[{"post_id":10},{"post_id":11}]}'),
+                               (4,'refresh','{"posts":[{"post_id":12,"original_post_id":10}]}'),
+                               (5,'refresh','{"posts":[{"post_id":11}]}');
+      INSERT INTO "like" VALUES (10,4);
+      INSERT INTO comment VALUES (11,3,'too pricey');
+      INSERT INTO mute VALUES (3,2);
+    """)
+    d.commit()
+    out = feed.read(tmp_path / "t.db", [{"id": "adA"}, {"id": "adB"}], ["Asha", "Ravi", "Meera"])
+    a = {r["persona"]: r["reaction"] for r in out["adA"]["reactions"]}
+    b = {r["persona"]: r for r in out["adB"]["reactions"]}
+    assert a == {"Asha": "share", "Ravi": "engage"}             # repost; like seen via the repost
+    assert b["Asha"]["reaction"] == "dislike" and b["Asha"]["parts"]["copy"]["why"] == "too pricey"
+    assert b["Meera"]["reaction"] == "share" and out["adB"]["counts"]["quote"] == 1

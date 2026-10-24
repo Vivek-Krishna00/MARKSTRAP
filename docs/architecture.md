@@ -28,7 +28,8 @@ The simulation filters, reality judges. Everything else serves that loop.
 | LLM for every agent | `engine/llm.py` | any open model behind an OpenAI-compatible API (Qwen, Llama via vLLM/Ollama) |
 | Evolution loop | `engine/evolve.py` | Python stdlib |
 | Store (agents, ads, lineage, dial log) | `engine/db.py` | SQLite |
-| Audience personas | `engine/personas.py` | 30-facet IPIP-NEO-120 copula (n=271,547) from developmental-agent-simulator |
+| Audience personality | `engine/personality.py`, `engine/personas.py` | 30-facet IPIP-NEO-120 copula (n=271,547) from developmental-agent-simulator; genes + nonshared environment + maturation, lazy closed form |
+| Audience feed (optional) | `audience/` (own Python 3.11 venv), `engine/audience.py` | MiroFish's OASIS runner (AGPL-3.0, copied), OASIS / camel-oasis (Apache-2.0); `AUDIENCE_BACKEND=oasis` |
 | Audience memory | `engine/memory.py` | Graphiti + FalkorDB (or SQLite fallback) |
 | API + dashboard | `engine/api.py`, `web/index.html` | FastAPI, vanilla JS |
 | Config / dials | `config.yaml` | YAML |
@@ -47,8 +48,19 @@ The simulation filters, reality judges. Everything else serves that loop.
 - Judge prompt carries "tendencies, not obligations" (situational variability research: no caricatures).
 - Not taken: memory decay, mood, hormones, sleep, household, lifespan; attention model (household-shaped, uncalibrated).
 
+## Audience feed (MiroFish without Zep)
+With `AUDIENCE_BACKEND=oasis`, phase 2 makes all of a term's ads first, then judges them together in **one shared
+OASIS Twitter feed**: each ad is posted by its own brand account, the 12 people act for `oasis_rounds` rounds and
+see whatever the TwHIN-BERT recommender shows them. Their actions are read back from the OASIS sqlite as one
+reaction per person who was shown the ad (repost/quote → share, like/comment/follow → engage, dislike/mute →
+dislike, seen only → ignore), so `sim_score`, boredom, shortlist and demotion are unchanged.
+The runner and profile writer are MiroFish's own code (`audience/NOTICE`); Zep is not used, and MiroFish's
+LLM-written MBTI personas are replaced by `engine/personality.py`. Personas and memories are built in
+`engine/audience.py` and only reach the audience process, never makers. Without the flag, the batched judge is used.
+Measured: first run downloads TwHIN-BERT (~0.5 GB, once); then ~30 s startup + ~10 s per round for 4 people.
+
 ## Cut for the hackathon (from the design notes' MVP brief)
-- OASIS feed for the interact phase → one mentor LLM call per term. Add OASIS when cultural copying needs a real feed.
+- OASIS feed for the interact phase (makers copying each other) → still one mentor LLM call per term. OASIS is used for the audience only.
 - Graphiti is opt-in (`MEMORY_BACKEND=graphiti`): it needs an embeddings endpoint.
 - No image rendering; visuals are evolved as descriptions (the design defers rendering to survivors anyway).
 - Later per design: Loka, relegation, team economy, executives, classifier judge (D69–D71), fine-tuning.

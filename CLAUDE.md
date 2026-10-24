@@ -15,7 +15,9 @@ endpoint, Graphiti + FalkorDB, FastAPI, SQLite. No proprietary APIs in `engine/`
 
 ## Layout
 - `engine/evolve.py` — the whole loop: seed, interact (nurture), produce & judge, queens reproduce, age-out, import real results
-- `engine/personas.py` — audience personality sampled from a fitted 30-facet model (`engine/data/`), never LLM-invented
+- `engine/personality.py` — audience personality: 30 facets from genes + environment + maturation on the fitted copula (`engine/data/`), lazy, never LLM-invented; spec `docs/research/personality_spec.md`
+- `engine/personas.py` — samples people (age first) through personality.py; LLM only adds name + habits
+- `audience/` + `engine/audience.py` — MiroFish's OASIS feed as the audience (`AUDIENCE_BACKEND=oasis`, `make audience-setup`); copied AGPL code, no Zep
 - `engine/memory.py` — audience memory (SQLite default, Graphiti when `MEMORY_BACKEND=graphiti`)
 - `engine/llm.py` — single `chat_json` call; tests monkeypatch it
 - `site/` (React + Vite + React Bits) — the MarkStrap website, built by `make site` into `web/site/`, served at `/`

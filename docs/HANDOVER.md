@@ -13,11 +13,12 @@ Hackathon project (6-hour build, open-source tools/models must be used **inside*
   "my office" = MiroFish), OASIS, Graphiti + FalkorDB.
 - Team: user (Vivek), teammate Kanishk (design doc + `github.com/KanishkRanjan/developmental-agent-simulator`).
 
-## What is built (all working, `make test` = 10 passing)
+## What is built (all working, `make test` = 27 passing)
 | Area | Files | Notes |
 |---|---|---|
 | Evolution loop | `engine/evolve.py` | seed, interact (lessons), produce & judge (parallel), queens reproduce, age-out to archive, demotion ratchet, boredom, import real results (per-platform ratios, z vs campaign baseline), revive, lineage |
-| Audience personas | `engine/personas.py`, `engine/data/profile_population_v1_model.json` | 30-facet IPIP-NEO-120 copula (n=271,547) from Kanishk's repo; LLM only names people + habits |
+| Audience personality | `engine/personality.py`, `engine/personas.py`, `engine/data/profile_population_v1_model.json` | 30-facet copula (n=271,547) from Kanishk's repo; z = √h2·G + E(age) + M(age) + deltas, lazy closed form, sha256-seeded, no archetypes/MBTI. Age sampled first; LLM only names people + habits. Spec `docs/research/personality_spec.md`, ledger + `docs/PARAMETERS.md`. Twin test recovers h2 0.385 vs 0.40 |
+| Audience feed | `audience/` (Python 3.11 venv, `make audience-setup`), `engine/audience.py` | `AUDIENCE_BACKEND=oasis`: MiroFish's own OASIS runner (AGPL, copied, `audience/NOTICE`), no Zep; all ads of a term in one Twitter feed, OASIS actions → share/engage/ignore/dislike. Live-tested with Gemini: works; free tier (15 req/min) runs out during breeding — use Vertex |
 | Memory | `engine/memory.py` | SQLite default; Graphiti+FalkorDB when `MEMORY_BACKEND=graphiti` (needs embeddings endpoint) |
 | LLM client | `engine/llm.py` | `chat_json`; `LLM_PROVIDER=vertex` uses Google service-account token (auto-refresh) else base URL + key; 60s timeout, 3 retries; strips `<think>` |
 | Agency layer | `engine/brief.py` | materials (text/URL/PDF; images listed by name), brief extraction, next-experiment proposal |
@@ -59,7 +60,7 @@ Screenshots: headless Chrome `--screenshot` with a kill timeout (it hangs on end
 `--force-prefers-reduced-motion`). Claude-in-Chrome extension was not connected.
 
 ## Not built / deferred (per design "Later")
-OASIS feed (interact phase is one mentor LLM call), Loka/relegation, team economy, executives, classifier judge
+OASIS for the interact phase (makers; audience uses OASIS now), Phase-2 spec (employment, executives, Loka, currencies, classifier), Loka/relegation, team economy, executives, classifier judge
 (D69–D71), fine-tuning, video/reels (user chose images only), guardrails/legal labelling, auto-posting.
 
 ## User preferences learned
@@ -69,6 +70,9 @@ OASIS feed (interact phase is one mentor LLM call), Loka/relegation, team econom
 - Visual direction: near-black #080A0E, off-white #F0F1ED, ice blue #91D0FF; Manrope / Georgia italic / IBM Plex Mono; ASCII + dither art.
 
 ## Open flags
+- `audience/` is AGPL-3.0 (copied MiroFish code). Fine for an open-source hackathon; keep `LICENSE` + `NOTICE`.
+- Personality [U] defaults need the owner: `disinhibition_weights`, maturation sizes, env curve, `audience.age_range`.
+- With the OASIS feed an ad nobody was shown scores neutral (0.33) and passes `send_bar` 0.3 (sim only demotes).
 - React Bits license is MIT + Commons Clause (source-available, not OSI) — swap for CSS if judges are strict.
 - `profile_population_v1_model.json` came from Kanishk's repo (no license stated) — confirm with him.
 - Docker image build untested. Homepage scrolling / theme toggle / wheel behaviour only checked via screenshots.

@@ -2,7 +2,7 @@ PY := .venv/bin/python
 -include .env
 export
 
-.PHONY: help setup dev test up down logs gen falkordb index clean site ai-check
+.PHONY: help setup audience-setup dev test up down logs gen falkordb index clean site ai-check
 
 help:  ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -11,6 +11,11 @@ setup:  ## venv + deps + .env
 	python3 -m venv .venv
 	$(PY) -m pip install -q -e ".[dev]"
 	@test -f .env || cp .env.example .env
+
+audience-setup:  ## Python 3.11 venv for the MiroFish/OASIS audience (AUDIENCE_BACKEND=oasis)
+	$(PY) -m pip install -q uv
+	test -x audience/.venv/bin/python || .venv/bin/uv venv -q -p 3.11 audience/.venv
+	.venv/bin/uv pip install -q -p audience/.venv/bin/python -r audience/requirements.txt
 
 dev:  ## run API + dashboard locally on :8000
 	$(PY) -m uvicorn engine.api:app --reload --port 8000

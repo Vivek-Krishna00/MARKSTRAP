@@ -1,19 +1,19 @@
 """Audience archetypes grounded in real personality data, not invented by the LLM.
 
-Facet profiles are sampled from a Gaussian copula over the 30 IPIP-NEO-120 facets, fitted on 271,547 adults
-(data/profile_population_v1_model.json, from github.com/KanishkRanjan/developmental-agent-simulator).
-The model only names the person and their media habits; the facets stay authoritative.
+Each person gets an age, then a personality from engine/personality.py (origins: genes + nonshared environment +
+maturation, on the 30-facet copula fitted to 271,547 adults; data from github.com/KanishkRanjan/developmental-agent-simulator).
+The model only names the person and their media habits; the facets stay authoritative. No MBTI, no archetypes.
 
 Why facets, not five domain scores: in that repo's 27B pilot, plain-language facet prompts gave the expected
 action in 21/24 situations vs 8/24 for domain-only prompts; activation steering was not needed.
 """
-import json
-from pathlib import Path
-from statistics import NormalDist
-
 import numpy as np
+import yaml
 
-MODEL = json.loads((Path(__file__).resolve().parent / "data" / "profile_population_v1_model.json").read_text())
+from . import personality
+from .personality import MODEL  # noqa: F401  (re-exported)
+
+AGE_RANGE = yaml.safe_load((personality._HERE.parent / "config.yaml").read_text())["audience"]["age_range"]
 
 # (higher-score tendency, lower-score tendency) per facet.
 BEHAVIORS = {
@@ -53,20 +53,17 @@ EXPRESSION = ("These are tendencies, not obligations. Let the situation shape th
               "never turn one disposition into a constant caricature.")
 
 
+def sample_people(n: int, seed: int, age_range=None) -> list[tuple[int, dict]]:
+    """n people as (age, facet percentiles 0-100). Same sampler for everyone; extremes come from its tails."""
+    lo, hi = age_range or AGE_RANGE
+    ages = np.random.default_rng(seed).integers(lo, hi + 1, size=n)
+    return [(int(a), personality.to_percentiles(personality.personality_at(
+        personality.create_personality(f"{seed}-{i}", a), a))) for i, a in enumerate(ages)]
+
+
 def sample_facets(n: int, seed: int) -> list[dict]:
     """n correlated facet profiles as population percentiles (0-100)."""
-    rng = np.random.default_rng(seed)
-    z = rng.multivariate_normal(np.zeros(30), np.array(MODEL["latent_correlation"]), size=n)
-    cdf = NormalDist().cdf
-    out = []
-    for row in z:
-        p = {}
-        for facet, zi, counts in zip(MODEL["facets"], row, MODEL["marginal_counts"]):
-            cum = np.cumsum(counts)
-            i = min(int(np.searchsorted(cum / cum[-1], cdf(zi), side="right")), 16)
-            p[facet] = round(100 * (cum[i] - counts[i] / 2) / cum[-1], 1)  # mid-rank percentile of the raw score
-        out.append(p)
-    return out
+    return [p for _, p in sample_people(n, seed)]
 
 
 def describe(facets: dict, max_facets: int = 8) -> list[str]:

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import yaml
 
-from . import llm, memory, personas
+from . import audience, llm, memory, personas
 from .db import get, put, row
 
 CFG = yaml.safe_load((Path(__file__).resolve().parent.parent / "config.yaml").read_text())
@@ -57,15 +57,17 @@ def seed_campaign(con, goal: str, market: str, ad_type: str, brief: dict | None 
     put(con, "dials", dict(CFG["dials"]))
     d = dials(con)
     seed = random.randrange(2**31)
-    profiles = [personas.describe(f) for f in personas.sample_facets(d["audience_size"], seed)]
+    sampled = personas.sample_people(d["audience_size"], seed)
+    profiles = [personas.describe(f) for _, f in sampled]
     people = llm.chat_json(
         "You give names and media habits to audience archetypes for a marketing simulation. "
-        "Their personality is fixed; do not change or restate it.",
+        "Their age and personality are fixed; do not change or restate them.",
         f"Target market: {market}\nCampaign: {goal}\n"
-        + "\n".join(f"{i}. {' '.join(t)}" for i, t in enumerate(profiles))
-        + '\nFor each numbered person return {"personas": [{"name": str, "habits": str (age, platforms, '
+        + "\n".join(f"{i}. Age {a}. {' '.join(t)}" for i, ((a, _), t) in enumerate(zip(sampled, profiles)))
+        + '\nFor each numbered person return {"personas": [{"name": str, "habits": str (platforms, '
           'when and why they scroll)}]} in the same order.', temperature=0.9)["personas"]
-    put(con, "personas", [{**people[i % len(people)], "tendencies": t} for i, t in enumerate(profiles)])
+    put(con, "personas", [{**people[i % len(people)], "age": a, "facets": f, "tendencies": t}
+                          for i, ((a, f), t) in enumerate(zip(sampled, profiles))])
     put(con, "persona_seed", seed)
     for breed, b in CFG["breeds"].items():
         for caste, c in b["castes"].items():
@@ -164,20 +166,28 @@ def sim_score(reactions, seen, boredom_rate):
 
 
 def produce_and_judge(con, term, d):
-    campaign, audience = get(con, "campaign"), get(con, "personas")
+    campaign, people = get(con, "campaign"), get(con, "personas")
     teams = [t for t in assemble_teams(con, d["ads_per_term"]) if t]
+
+    feed = audience.enabled()
 
     def work(team):
         ad = make_ad(campaign, team)
+        if feed:  # judged together below, in one shared feed
+            return _id("ad"), team, ad, None
         q = f"{ad.get('headline', '')} {ad.get('visual', '')}"
         with _db_lock:
             lessons = memory.recall(con, q)
-        return team, ad, judge(audience, ad, lessons)
+        return _id("ad"), team, ad, judge(people, ad, lessons)
 
     with ThreadPoolExecutor(8) as ex:
         results = list(ex.map(work, teams))
+    if feed:
+        out = audience.evaluate({aid: ad for aid, _, ad, _ in results}, people,
+                                memory.recall(con, campaign["goal"]), d["oasis_rounds"])
+        results = [(aid, team, ad, out[aid]["reactions"]) for aid, team, ad, _ in results]
 
-    for team, ad, reactions in results:
+    for aid, team, ad, reactions in results:
         style = "/".join(f"{a['caste']}" for a in team if a["breed"] in ("copywriter", "visual_maker"))
         seen = con.execute("SELECT COUNT(*) FROM ads WHERE style=? AND term>=?",
                            (style, term - d["boredom_recovery_terms"])).fetchone()[0]
@@ -188,7 +198,7 @@ def produce_and_judge(con, term, d):
             _demote(con, style)
         con.execute("INSERT INTO ads (id, term, ad_type, style, team, content, reactions, sim_score, shortlisted)"
                     " VALUES (?,?,?,?,?,?,?,?,?)",
-                    (_id("ad"), term, campaign["ad_type"], style,
+                    (aid, term, campaign["ad_type"], style,
                      json.dumps([{"id": a["id"], "breed": a["breed"], "caste": a["caste"]} for a in team]),
                      json.dumps(ad), json.dumps(reactions), score, int(shortlisted)))
     con.commit()
