@@ -156,6 +156,10 @@ export default function Reel({ cid, rid, c, reload: reloadCampaign }) {
 
         {crit && <>
           <Section>{`5 · Quality review · ${crit.overall}/10`}</Section>
+          {crit.visual && <div className="visual" style={{ marginBottom: 14 }}>
+            FRAMES JUDGED BY — {crit.visual.by}{crit.visual.stopScroll != null ? ` · STOP-SCROLL ${crit.visual.stopScroll}/10` : ''} · SCENE VARIETY {crit.visual.stats?.variety} · REAL IMAGERY {Math.round((crit.visual.stats?.real_imagery || 0) * 100)}%
+            {crit.visual.verdict && <>{'\n'}“{crit.visual.verdict}”</>}{crit.visual.note && <>{'\n'}{crit.visual.note}</>}
+          </div>}
           <div className="scores">{Object.entries(crit.scores).map(([k, v]) => (
             <div key={k} className={`score ${v < 6 ? 'low' : ''}`}><span>{CRITERIA[k] || k}</span><b>{v.toFixed(0)}</b><i style={{ '--w': `${v * 10}%` }} /></div>
           ))}</div>

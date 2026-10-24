@@ -9,6 +9,8 @@ tts      piper | silent         Piper (GPL-3.0, MIT voices)             silent c
 timing   whisper | proportional faster-whisper word timestamps (MIT)    per-word share of the clip by length
 music    procedural             numpy pad + kick (license-clean)        uploaded track (role=music) wins
 stock    openverse | none       Openverse CC images, attribution kept   none
+vision   VISION_PROVIDER=vertex Llama 4 on Vertex (open weights), or    measured visual checks only
+         or VISION_BASE_URL     any OpenAI-compatible vision server
 """
 import hashlib
 import json
@@ -49,6 +51,8 @@ def available() -> dict:
         "timing": "whisper" if _env("timing", "proportional") == "whisper" and _has("faster_whisper") else "proportional",
         "music": "procedural",
         "stock": "openverse" if _env("stock", "none") == "openverse" else None,
+        "vision": "vertex" if os.getenv("VISION_PROVIDER") == "vertex" else "openai" if os.getenv("VISION_BASE_URL")
+        else None,
     }
 
 
@@ -76,6 +80,12 @@ def text_json(system: str, user: str, temperature: float = 0.6) -> dict:
     return llm.chat_json(system, user, temperature)
 
 
+def vision_json(system: str, user: str, images: list[bytes], temperature: float = 0.2) -> dict:
+    if not available()["vision"]:
+        raise NotConfigured("no vision model (set VISION_PROVIDER=vertex or VISION_BASE_URL)")
+    return llm.vision_json(system, user, images, temperature)
+
+
 # ---------- visuals ----------
 
 def image(prompt: str, negative: str, refs: list[str], nonce: int = 0) -> tuple[Path, dict]:
@@ -95,18 +105,27 @@ def video(prompt: str, image_path: str | None, seconds: float) -> tuple[Path, di
 def stock(query: str, timeout: float) -> tuple[Path, dict]:
     if not available()["stock"]:
         raise NotConfigured("stock search off (set REEL_STOCK_PROVIDER=openverse)")
+    import io
     import httpx
+    from PIL import Image
     r = httpx.get("https://api.openverse.org/v1/images/", timeout=timeout,
-                  params={"q": query[:120], "license_type": "commercial", "aspect_ratio": "tall", "page_size": 1})
+                  params={"q": query[:120], "license_type": "commercial,modification",  # captions = a derivative: no ND
+                          "aspect_ratio": "tall", "page_size": 6})
     r.raise_for_status()
-    hits = r.json().get("results") or []
-    if not hits:
-        raise NotConfigured(f"no stock result for '{query[:40]}'")
-    hit = hits[0]
-    path = cached(key("stock", hit["url"]), Path(hit["url"]).suffix.lower()[:5] or ".jpg",
-                  lambda: httpx.get(hit["url"], timeout=timeout, follow_redirects=True).content)
-    return path, {"provider": "openverse", "attribution": hit.get("attribution") or
-                  f"{hit.get('title')} by {hit.get('creator')} ({hit.get('license')})", "source": hit.get("foreign_landing_url")}
+    for hit in r.json().get("results") or []:
+        try:  # hosts behind Openverse sometimes answer with HTML or a tiny placeholder: keep only real photos
+            data = httpx.get(hit["url"], timeout=timeout, follow_redirects=True,
+                             headers={"User-Agent": "MarkStrap/0.1"}).content
+            im = Image.open(io.BytesIO(data))
+            im.load()
+            if min(im.size) < 300:
+                continue
+        except Exception:
+            continue
+        path = cached(key("stock", hit["url"]), ".img", lambda: data)
+        return path, {"provider": "openverse", "source": hit.get("foreign_landing_url"),
+                      "attribution": hit.get("attribution") or f"{hit.get('title')} by {hit.get('creator')} ({hit.get('license')})"}
+    raise NotConfigured(f"no usable stock photo for '{query[:40]}'")
 
 
 # ---------- audio ----------

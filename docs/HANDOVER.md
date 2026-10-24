@@ -2,7 +2,7 @@
 
 Read this first, then `CLAUDE.md`, `docs/architecture.md` and `docs/reel-director.md`.
 Repo: github.com/Vivek-Krishna00/MARKSTRAP (**public**), branch `main` (commits go straight to main).
-`make test` = 44 passing (engine/personality, Reel Director, agency workflow).
+`make test` = 46 passing (23 engine/personality + 13 Reel Director + 10 agency workflow).
 
 ## What this is
 Hackathon project; every tool and model inside the product is open source / open weight (hard rule).
@@ -84,6 +84,12 @@ Hackathon project; every tool and model inside the product is open source / open
   **Remotion rejected**: source-available, breaks the open-source rule.
 - Measured (M-series Mac): 20 s preview ≈ 5 s, 1080p export ≈ 13 s; storyboard on DeepSeek V4.1 Flash ≈ 16 s;
   live critic repaired 3 scenes (6.5 → 7.5), then the measured pacing fix cut scene-05's voice 3.9 s → 1.5 s.
+- **Visual judge** (added after the user found the demo Reel ugly while the blind critic said 8/10): keyframes →
+  Llama 4 Maverick on Vertex (`VISION_PROVIDER=vertex`, us-east5, "Llama 4 API Service" — NOT "Deploy model",
+  which rents GPUs hourly) with a harsh anchored rubric + measured scene variety / real-imagery share.
+  `make reel-eval` proves ranking: broken 3.2 < placeholder 6.6 < real photos 7.3 → `docs/reel-eval.md`.
+  Vertex Llama 4 accepts max 5 images per request (frames are tiled). `visual_variety_min` 0.12 sits between
+  placeholder (0.10) and real (0.27). Openverse limited to licences allowing modification (captions = derivative).
 - Demo fixture: `engine/data/reel_demo.json` (Midnight Crumb cake delivery, 20 s, 6 scenes).
 - UI verified with Playwright on system Chrome (Chrome extension was not connected): full flow, light/dark,
   390 px width, no console errors.
@@ -106,6 +112,7 @@ Hackathon project; every tool and model inside the product is open source / open
    `IMAGE_BASE_URL`. Biggest visual upgrade for Reels too.
 2. Generated video clips: needs a hosted open video model (Wan 2.x / LTX-Video) behind `reel_providers.video`.
 3. Before demo: one Reel on Vertex with a real logo + 2–3 product photos; keep `make reel-demo FINAL=1` as fallback.
+   Show `docs/reel-eval.md` as evidence the judge separates bad from good.
 4. Owner decisions: unseen ad scores neutral 0.33 and passes `send_bar` 0.3 — keep or hold back? Personality [U]
    defaults (`disinhibition_weights`, maturation sizes, env curve, `audience.age_range` 18–45).
 5. Watch: first e2e generation drew the `tension` caste for all 6 teams — check again on the next run.

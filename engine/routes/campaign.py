@@ -524,6 +524,8 @@ def capabilities() -> dict:
         notes.append("The voice model isn't installed: Reels render with a silent voice track and captions.")
     if av["text"] == "mock":
         notes.append("No writing model is connected: the storyboard comes from a template you can edit.")
+    if not av.get("vision"):
+        notes.append("No vision model is connected: finished frames are checked by measured rules only, not judged.")
     notes.append("Music follows your direction only when you upload a track; otherwise a simple generated bed plays.")
     return {"providers": av, "notes": notes}
 

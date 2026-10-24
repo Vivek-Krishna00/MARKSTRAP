@@ -105,6 +105,10 @@ reel:                             # Reel Director (engine/reel.py) and composer 
   repair_max_scenes: 3            # scenes revised per pass
   repair_threshold: 6             # a criterion scoring below this (0-10) gets its scenes repaired
   director_retries: 1             # re-asks when the storyboard fails validation, then the template director
+  review_frames: 8                # keyframes the vision judge sees (2 hook + scene midpoints)
+  vision_max_images: 5            # images per request (Llama 4 on Vertex allows 5); extra frames are tiled
+  visual_variety_min: 0.12        # [U] mean pixel difference between scene frames; below = "scenes look alike"
+  real_imagery_min: 0.5           # share of scenes that should show real photos/footage
   render_timeout_s: 900
   provider_timeout_s: 120
   upload_max_mb: 200

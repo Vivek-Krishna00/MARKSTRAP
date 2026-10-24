@@ -112,8 +112,8 @@ export const CRITERIA = {
   hook: 'First 3 seconds', clarity: 'Message clarity', visual_relevance: 'Visual relevance',
   brand_consistency: 'Brand consistency', product_accuracy: 'Product accuracy', continuity: 'Scene continuity',
   pacing: 'Pacing', caption_readability: 'Caption readability', audio_balance: 'Audio balance',
-  cta_clarity: 'Call to action', platform_fit: 'Platform fit',
+  cta_clarity: 'Call to action', platform_fit: 'Platform fit', visual_quality: 'Visual quality',
 };
 
 export const REEL_STAGES = { storyboard: 'Storyboard', assets: 'Visuals', voice: 'Voice', captions: 'Captions',
-  critic: 'Quality review', preview: 'Preview', final: 'Final export' };
+  critic: 'Quality review', preview: 'Preview', review: 'Frame review', final: 'Final export' };

@@ -34,7 +34,8 @@ No paid provider: `make reel-demo` (add `FINAL=1` for 1080p) renders the fixture
 | tts | Piper | silent clip |
 | timing | faster-whisper | per-word share of each scene's clip |
 | music | your upload (role = music) | procedural pad, generated, no licence to track |
-| stock | `openverse` (CC images, attribution stored on the asset) | off |
+| stock | `openverse` (CC images that allow modification, attribution stored on the asset) | off |
+| vision | Llama 4 on Vertex (`VISION_PROVIDER=vertex`) or any `VISION_BASE_URL` | measured visual checks only |
 
 Sora and other proprietary APIs are deliberately absent (hackathon rule, and no API access).
 
@@ -52,6 +53,15 @@ Sora and other proprietary APIs are deliberately absent (hackathon rule, and no 
 - **Critic**: measured checks (voice overrun from the real audio length, text length, hook, CTA, failed or stand-in
   visuals) plus model scores on 11 criteria (minimum of both wins). Weak scenes are rewritten with timing locked;
   only their hashes change, so only they are re-made. Capped by `reel.critic_rounds` and `reel.repair_max_scenes`.
+- **Visual review** (after the preview renders): keyframes (2 hook + scene midpoints) go to an open-weight
+  vision model (Llama 4 Maverick on Vertex, `VISION_PROVIDER=vertex`, ~₹0.2 per Reel; frames tiled to the
+  endpoint's 5-image cap) under a harsh anchored rubric ("5 = obvious template"), blind to variant and maker notes.
+  Measured checks the model can't argue with: scene variety (mean pixel difference between scenes) and the share
+  of scenes with real photos/footage. Scores merge by minimum; the UI shows stop-scroll, verdict and both stats.
+  Without a vision model only the measured checks run.
+- **Proof** (`make reel-eval`, ~₹2): the same storyboard rendered broken / placeholder / real CC photos and judged
+  3× blind. Result in `docs/reel-eval.md`: broken 3.2 < placeholder 6.6 < real 7.3 (stop-scroll 1.0 / 4.7 / 6.3), PASS.
+  A naive one-frame prompt gave the placeholder 8/10, which is why the rubric and measured checks exist.
 - **Composer**: `engine/compose.py` draws `reel.timeline()` only: Ken Burns stills, video, motion graphics,
   crossfade/slide/whip, word-highlight captions in the safe zones, per-scene voice, music ducked under the voice,
   whoosh/pop SFX, logo + CTA end card. Renders in a subprocess with a timeout.

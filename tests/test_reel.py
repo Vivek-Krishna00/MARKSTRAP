@@ -270,3 +270,45 @@ def test_api_reel_flow(env, monkeypatch, tmp_path):
     assert c.post(f"{base}/reels/{rid}/approve", json={"approved": True}).json()["approved"]
     assert c.get(f"{base}/launch").json()["items"][0]["reel"]["approved"]
     assert any(x["id"] == rid for x in c.get(base).json()["reels"])
+
+
+# ---------- visual review ----------
+
+def jpg(color, noise=False):
+    import numpy as np
+    a = np.full((640, 360, 3), color, np.uint8)
+    if noise:
+        a = np.random.default_rng(sum(color)).integers(0, 255, (640, 360, 3), dtype=np.uint8)
+    b = io.BytesIO()
+    Image.fromarray(a).save(b, "JPEG")
+    return b.getvalue()
+
+
+def test_visual_checks_flag_lookalike_placeholder_scenes():
+    spec = reel.validate(DEMO["spec"], []).model_dump()
+    same = [{"sceneId": s["id"], "label": "", "t": 0, "jpg": jpg((60, 20, 80))} for s in spec["scenes"]]
+    varied = [{"sceneId": s["id"], "label": "", "t": 0, "jpg": jpg((40 * i, 200 - 30 * i, 90), noise=i % 2 == 1)}
+              for i, s in enumerate(spec["scenes"])]
+    motion = {s["id"]: {"asset": {"kind": "motion"}} for s in spec["scenes"]}
+    photos = {s["id"]: {"asset": {"kind": "image"}} for s in spec["scenes"]}
+    bad, bs = reel.visual_checks(same, spec, motion)
+    good, gs = reel.visual_checks(varied, spec, photos)
+    assert bs["variety"] < gs["variety"] and bs["real_imagery"] == 0 and gs["real_imagery"] == 1
+    assert len(bad) == 2 and not good
+
+
+def test_frames_are_tiled_to_the_endpoint_limit_and_judge_is_optional(monkeypatch):
+    frames = [{"sceneId": f"s{i}", "label": "", "t": i, "jpg": jpg((i * 30, 0, 0))} for i in range(7)]
+    images, per = reel.tile(frames, 5)
+    assert per == 2 and len(images) == 4 and Image.open(io.BytesIO(images[0])).width == 720
+    spec = reel.validate(DEMO["spec"], []).model_dump()
+    monkeypatch.setattr(reel, "keyframes", lambda mp4, sp: frames[:6])
+    monkeypatch.setattr(P, "available", lambda: {"vision": None})
+    v = reel.visual_review(spec, {}, {}, None)
+    assert "not judged" in v["note"] and v["scores"]["visual_quality"] < 8
+    monkeypatch.setattr(P, "available", lambda: {"vision": "vertex"})
+    monkeypatch.setattr(P, "vision_json", lambda *a: {"scores": {"hook": 3, "visual_quality": 9, "pacing": 1},
+                                                      "stopScroll": 2, "verdict": "meh", "issues": []})
+    v = reel.visual_review(spec, {}, {}, None)
+    assert v["scores"]["hook"] == 3 and "pacing" not in v["scores"]  # judge may only score what frames show
+    assert v["scores"]["visual_quality"] < 9  # measured checks cap a generous judge
