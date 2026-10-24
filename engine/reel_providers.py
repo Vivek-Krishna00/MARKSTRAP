@@ -5,7 +5,8 @@ kind     REEL_<KIND>_PROVIDER   real                                   fallback
 text     llm | mock             engine/llm.py (open model)             template storyboard + rule-based critic
 image    openai | none          render._openai (IMAGE_BASE_URL)         uploaded reference or motion graphics
 video    none                   no open model host yet (Wan/LTX later)  image or upload with Ken Burns motion
-tts      piper | silent         Piper (GPL-3.0, MIT voices)             silent clip timed at the `wpm` dial
+tts      kokoro | piper | silent Kokoro-82M (Apache-2.0; 54 voices incl. silent clip timed at the `wpm` dial
+                                Hindi) via kokoro-onnx (MIT); Piper (GPL-3.0) kept as a fallback
 timing   whisper | proportional faster-whisper word timestamps (MIT)    per-word share of the clip by length
 music    procedural             numpy pad + kick (license-clean)        uploaded track (role=music) wins
 stock    openverse | none       Openverse CC images, attribution kept   none
@@ -16,6 +17,7 @@ import hashlib
 import json
 import os
 import re
+import threading
 import wave
 from pathlib import Path
 
@@ -25,6 +27,8 @@ from . import llm, render
 
 CACHE = Path(os.getenv("REEL_DIR", "data/reels")) / "cache"
 VOICE = Path(os.getenv("PIPER_VOICE", "data/voices/en_US-lessac-medium.onnx"))
+KOKORO = Path(os.getenv("KOKORO_MODEL", "data/voices/kokoro-v1.0.onnx"))
+KOKORO_VOICES = KOKORO.with_name("voices-v1.0.bin")
 
 
 class NotConfigured(RuntimeError):
@@ -47,13 +51,24 @@ def available() -> dict:
         else "llm",
         "image": "openai" if _env("image", "openai") == "openai" and os.getenv("IMAGE_BASE_URL") else None,
         "video": None,
-        "tts": "piper" if _env("tts", "piper") == "piper" and _has("piper") and VOICE.exists() else "silent",
+        "tts": _tts(),
         "timing": "whisper" if _env("timing", "proportional") == "whisper" and _has("faster_whisper") else "proportional",
         "music": "procedural",
         "stock": "openverse" if _env("stock", "none") == "openverse" else None,
         "vision": "vertex" if os.getenv("VISION_PROVIDER") == "vertex" else "openai" if os.getenv("VISION_BASE_URL")
         else None,
     }
+
+
+def _tts() -> str:
+    want = _env("tts", "kokoro")
+    kokoro = _has("kokoro_onnx") and KOKORO.exists() and KOKORO_VOICES.exists()
+    piper = _has("piper") and VOICE.exists()
+    if want == "kokoro" and kokoro:
+        return "kokoro"
+    if want in ("kokoro", "piper") and piper:
+        return "piper"
+    return "kokoro" if want != "silent" and kokoro else "silent"
 
 
 def key(*parts) -> str:
@@ -144,28 +159,34 @@ def wav_seconds(path) -> float:
         return w.getnframes() / w.getframerate()
 
 
-_voice = None
+_engines = {}
 
 
-def tts(text: str, wpm: float) -> tuple[Path, dict]:
+def tts(text: str, wpm: float, voice: str = "af_heart", speed: float = 1.0, lang: str = "en-us") -> tuple[Path, dict]:
+    """One voiceover clip. `voice`/`speed`/`lang` apply to Kokoro; Piper has one voice; silent is timed at wpm."""
     prov = available()["tts"]
 
     def make():
-        out = CACHE / f"tmp-{os.getpid()}.wav"
-        if prov == "piper":
-            global _voice
+        out = CACHE / f"tmp-{os.getpid()}-{threading.get_ident()}.wav"
+        if prov == "kokoro":
+            from kokoro_onnx import Kokoro
+            k = _engines.get("kokoro") or _engines.setdefault("kokoro", Kokoro(str(KOKORO), str(KOKORO_VOICES)))
+            samples, sr = k.create(text, voice=voice, speed=speed, lang=lang)
+            _write_wav(out, np.asarray(samples), sr)
+        elif prov == "piper":
             from piper import PiperVoice
-            _voice = _voice or PiperVoice.load(str(VOICE))
+            v = _engines.get("piper") or _engines.setdefault("piper", PiperVoice.load(str(VOICE)))
             with wave.open(str(out), "wb") as w:
-                _voice.synthesize_wav(text, w)
+                v.synthesize_wav(text, w)
         else:
             _write_wav(out, np.zeros(int(max(0.3, len(text.split()) / wpm * 60) * 22050)), 22050)
         data = out.read_bytes()
         out.unlink()
         return data
 
-    path = cached(key("tts", prov, VOICE.name if prov == "piper" else wpm, text), ".wav", make)
-    return path, {"provider": prov, "voice": VOICE.stem if prov == "piper" else None}
+    who = {"kokoro": (voice, speed, lang), "piper": VOICE.name, "silent": wpm}[prov]
+    path = cached(key("tts", prov, who, text), ".wav", make)
+    return path, {"provider": prov, "voice": voice if prov == "kokoro" else VOICE.stem if prov == "piper" else None}
 
 
 def word_times(path, text: str) -> list[list]:

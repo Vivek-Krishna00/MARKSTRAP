@@ -3,6 +3,7 @@ import csv
 import io
 import json
 import threading
+import traceback
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, UploadFile
@@ -338,8 +339,8 @@ def _reel_bg(rid, fn):
         own = db.connect(path)  # its own connection: the UI polls the shared one while this writes
         try:
             fn(own, rid)
-        except Exception:  # already recorded on the reel by the stage that failed
-            pass
+        except Exception:  # recorded on the reel by the stage that failed; logged too in case recording failed
+            traceback.print_exc()
         finally:
             reel.release(rid)
             own.close()
@@ -370,7 +371,7 @@ def get_reel(rid: str):
 def edit_reel_brief(rid: str, fields: dict):
     _idle(rid)
     b = _reel(rid)["brief"]
-    b.update({k: v for k, v in fields.items() if k in b})  # only known brief fields
+    b.update({k: v for k, v in fields.items() if k in b or k in ("voice", "language")})  # only known brief fields
     try:
         b["durationSeconds"] = float(b["durationSeconds"])
     except (TypeError, ValueError):

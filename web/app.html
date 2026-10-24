@@ -471,6 +471,7 @@ async function setAp(id, status) { await post(`/api/ads/${id}/approval`, {status
 const REEL_GUIDE = "The director plans every scene before anything is generated. Edit freely: only the scenes you change are re-made, and nothing paid is generated twice.";
 const ASSET_TYPES = {motion_graphics:"Motion graphics", uploaded_asset:"Your upload", generated_image:"Generated image", generated_video:"Generated video", stock_video:"Stock (Openverse)"};
 const ROLES = {product:"Product", character:"Character / spokesperson", location:"Location", style:"Style reference", logo:"Logo", music:"Music track", font:"Font", reference_reel:"Reference Reel"};
+const VOICES = [["auto", "Auto (from voice direction)"], ["af_heart", "Heart · warm female (US)"], ["af_bella", "Bella · bright female (US)"], ["am_michael", "Michael · male (US)"], ["am_fenrir", "Fenrir · deep male (US)"], ["bf_emma", "Emma · female (UK)"], ["bm_george", "George · male (UK)"], ["hf_alpha", "Alpha · female (Hindi)"], ["hm_omega", "Omega · male (Hindi)"]];
 const REEL_STAGES = ["storyboard", "assets", "voice", "captions", "critic", "preview", "review", "final"];
 const CRIT_NAMES = {hook:"First 3 seconds", clarity:"Message clarity", visual_relevance:"Visual relevance", brand_consistency:"Brand consistency", product_accuracy:"Product accuracy", continuity:"Scene continuity", pacing:"Pacing", caption_readability:"Caption readability", audio_balance:"Audio balance", cta_clarity:"Call to action", platform_fit:"Platform fit", visual_quality:"Visual quality"};
 
@@ -518,6 +519,8 @@ function reelView() {
     ${f("brandVoice", "Brand voice")}${f("style", "Visual style")}${f("colors", "Brand colours", "#1A1033 #FFB84D")}
     <div class="grid2" style="gap:0 14px"><div><label>Platform</label><select data-rb="platform" ${R.busy ? "disabled" : ""}>${[["instagram_reels", "Instagram Reels"], ["tiktok", "TikTok"], ["youtube_shorts", "YouTube Shorts"]].map(([v, l]) => `<option value="${v}" ${b.platform === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
       <div><label>Seconds</label><input data-rb="durationSeconds" type="number" min="6" max="90" value="${b.durationSeconds}" ${R.busy ? "disabled" : ""}></div></div>
+    <div class="grid2" style="gap:0 14px"><div><label>Language</label><select data-rb="language" ${R.busy ? "disabled" : ""}>${["English", "Hindi"].map(v => `<option ${(b.language || "English") === v ? "selected" : ""}>${v}</option>`).join("")}</select></div>
+      <div><label>Voice</label><select data-rb="voice" ${R.busy ? "disabled" : ""}>${VOICES.map(([v, l]) => `<option value="${v}" ${(b.voice || "auto") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div></div>
   </div>
   <label>Notes for the director</label><textarea data-rb="notes" rows="2" placeholder="Anything the scenes must show or avoid" ${R.busy ? "disabled" : ""}>${esc(b.notes)}</textarea>
 
@@ -570,12 +573,22 @@ function productionBlock() {
     <div class="scores">${Object.entries(c.scores).map(([k, v]) => `<div class="score ${v < 6 ? "low" : ""}"><span>${CRIT_NAMES[k] || k}</span><b>${v.toFixed(0)}</b><i style="--w:${v * 10}%"></i></div>`).join("")}</div>
     ${(c.history || []).map(h => `<p class="note" style="margin-top:12px">Round ${h.round}: repaired ${h.repaired.map(esc).join(", ")} automatically.</p>`).join("")}
     ${c.issues.length ? `<ul class="clean" style="margin-top:12px">${c.issues.slice(0, 8).map(i => `<li>${i.sceneId ? `<span class="mono">${esc(i.sceneId)}</span> ` : ""}${esc(i.problem)}${i.fix ? ` <span class="note">→ ${esc(i.fix)}</span>` : ""}</li>`).join("")}</ul>` : `<p class="note">No open issues.</p>`}` : ""}
+  ${c?.screening ? screeningBlock(c.screening) : ""}
   ${r.preview ? `<h3 class="label">Preview</h3><div class="player">
     <video controls playsinline preload="metadata" src="/reels/${R.id}/${r.final ? "final" : "preview"}.mp4?v=${esc(String(r.preview_at || ""))}${r.final ? "f" : ""}"></video>
     <div><p style="margin-top:0">${r.final ? "Final 1080 × 1920 export is ready." : "This is a fast low-resolution preview. Export renders the full 1080 × 1920 MP4."}</p>
       <div class="actions" style="margin-top:12px"><button class="${r.final ? "line" : "btn"}" id="rExport" ${R.busy ? "disabled" : ""}>${r.final ? "Export again" : "Export final MP4"}</button>
       ${r.final ? `<a href="/reels/${R.id}/final.mp4" download><button class="btn" type="button">Download MP4</button></a>` : ""}</div>
       <p class="note">Captions sit inside the platform safe zones; music ducks under the voice.</p></div></div>` : ""}`;
+}
+
+function screeningBlock(sc) {
+  const pct = x => `${Math.round(x * 100)}%`;
+  return `<h3 class="label">MiroFish screening <span class="count">${sc.people} people · ${Math.round(sc.weight * 100)}% Llama</span></h3>
+  <table><tr><th>Version</th><th>Llama</th><th>Reach</th><th>Share</th><th>Engage</th><th>Crowd</th><th>Score</th></tr>
+  ${sc.posts.map(p => `<tr><td>${p.post.includes("~") ? "With fixes" : "As rendered"}</td><td class="num">${p.llama.toFixed(1)}</td><td class="num">${pct(p.reach)}</td><td class="num">${pct(p.share_rate)}</td><td class="num">${pct(p.engage_rate)}</td><td class="num">${p.crowd.toFixed(1)}</td><td class="num"><b>${p.score.toFixed(1)}</b></td></tr>`).join("")}</table>
+  ${sc.posts.flatMap(p => (p.words || []).slice(0, 2).map(w => `<div class="quote">“${esc(w.text)}”<span>— ${esc(w.persona)}, ${esc(w.age)} · ${p.post.includes("~") ? "with fixes" : "as rendered"} · ${esc(w.reaction)}</span></div>`)).join("")}
+  <p class="note" style="margin-top:12px">Simulated people read Llama's description of the frames, not the pixels. "With fixes" is Llama's description of an improved cut, not a render. Real results override all of this.</p>`;
 }
 
 function bindReel() {

@@ -18,7 +18,7 @@ dependencies = [
   "pillow>=10",
 ]
 
-# Reel voice: `make reel-setup` (Piper, GPL-3.0). Word timings from audio: pip install faster-whisper (MIT).
+# Reel voices: `make reel-setup` (Kokoro via kokoro-onnx, MIT/Apache-2.0; Piper GPL-3.0 fallback). Word timings from audio: pip install faster-whisper (MIT).
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
