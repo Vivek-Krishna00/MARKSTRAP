@@ -74,11 +74,15 @@ Sora and other proprietary APIs are deliberately absent (hackathon rule, and no 
 - **Motion-graphics designs** (when a scene has no photo/footage), chosen by the scene's purpose: hook = words slam
   in with a shake under a spotlight; problem = typewriter + cursor; demonstration = card slides up with a progress
   bar; proof = the first number counts up (+ five stars filling for ratings); payoff = price stamp lands with an
-  overshoot; CTA = logo + breathing button. Film grain on top. Measured effect on the demo: scene variety
+  overshoot; CTA = logo + breathing button. Film grain on top. Behind the text, a moving texture in the brand's
+  ASCII/dither style (`compose.field`): hook = dithered shockwave, problem = ASCII rain, demo = dithered waves,
+  proof = ripple, payoff = sunburst, CTA = drifting ASCII blobs (`reel.texture_*_alpha`, 0 = off).
+- **Sound**: voice + music (ducked under the voice) + an optional soft low tick on scenes marked `pop`. The noise
+  "whoosh" sweeps at transitions were removed (user: they hurt). Measured effect on the demo: scene variety
   0.10 → 0.16, MiroFish screening 5.8 → 7.3 (crowd 6.0 → 8.7), Llama in the proof run 6.4 → 6.4–6.5 (within noise).
 - **Composer**: `engine/compose.py` draws `reel.timeline()` only: Ken Burns stills, video, motion graphics,
   crossfade/slide/whip, word-highlight captions in the safe zones, per-scene voice, music ducked under the voice,
-  whoosh/pop SFX, logo + CTA end card. Renders in a subprocess with a timeout.
+  a soft tick on `pop` scenes, logo + CTA end card. Renders in a subprocess with a timeout.
 - Dials: `config.yaml` → `reel:`.
 
 ## Limits

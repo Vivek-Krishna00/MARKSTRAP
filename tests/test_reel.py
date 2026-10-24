@@ -205,7 +205,7 @@ def test_compose_renders_a_tiny_reel(tmp_path):
           "words": [{"w": "hello", "t0": 0.1, "t1": 0.5}, {"w": "there.", "t0": 0.5, "t1": 0.9}],
           "vo": [{"path": str(voice), "start": 0.1, "end": 1.1}],
           "music": {"path": None, "volume": 0.3, "duck": 0.1, "ramp": 0.1},
-          "sfx": [{"kind": "whoosh", "t": 1.0}], "sfx_volume": 0.5, "transition_s": 0.3,
+          "sfx": [{"kind": "pop", "t": 1.0}], "sfx_volume": 0.2, "transition_s": 0.3,
           "logo": str(img), "cta": "shop.in", "title": "t"}
     out = tmp_path / "o.mp4"
     compose.render(tl, str(out))

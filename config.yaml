@@ -101,7 +101,9 @@ reel:                             # Reel Director (engine/reel.py) and composer 
   music_volume: 0.35
   duck_volume: 0.1                # music level while the voiceover speaks
   duck_ramp_s: 0.15
-  sfx_volume: 0.5
+  sfx_volume: 0.2                 # soft low tick only (noise whooshes were removed: too harsh)
+  texture_dither_alpha: 80        # moving dithered background texture on motion-graphics scenes (0 = off)
+  texture_ascii_alpha: 70         # moving ASCII background texture (problem and CTA scenes)
   transition_s: 0.35
   ken_burns: 0.12                 # zoom change over one still scene
   critic_rounds: 1                # automatic critic -> repair passes per production (cost cap)

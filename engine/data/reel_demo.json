@@ -46,7 +46,7 @@
     "visualDescription": "Dark hostel room, one desk lamp, textbook open", "assetType": "motion_graphics",
     "subject": "a tired student at a desk", "action": "head drops onto the open textbook",
     "environment": "hostel room at night", "lighting": "single warm desk lamp", "emotion": "relatable exhaustion",
-    "transitionOut": "whip", "soundEffect": "whoosh"},
+    "transitionOut": "whip", "soundEffect": ""},
    {"id": "scene-02", "startSeconds": 2.5, "endSeconds": 6, "purpose": "problem",
     "voiceover": "Canteen's shut. Your brain wants sugar.", "onScreenText": "Canteen: closed. Brain: hungry.",
     "visualDescription": "Shuttered canteen, flickering sign", "assetType": "motion_graphics",

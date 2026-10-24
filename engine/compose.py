@@ -39,6 +39,36 @@ def back(x):
     return 1 + 2.7 * x ** 3 + 1.7 * x ** 2
 
 
+BAYER = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]) / 16 + 1 / 32
+ASCII = " .:-=+*#%@"
+
+
+def field(kind: str, i: int, lt: float, w: int, h: int) -> np.ndarray:
+    """A slowly moving 0..1 pattern per scene purpose; the brand's dither/ASCII look gives it character."""
+    y, x = np.mgrid[0:h, 0:w]
+    x, y = x / w, y / w  # square units: x 0..1, y 0..h/w
+    if kind == "hook":  # shockwave rings out of the spotlight
+        r = np.hypot(x - 0.5, (y - 0.38 * h / w))
+        return np.clip(0.5 + 0.5 * np.sin(26 * r - 7 * lt) - 1.6 * r + 0.25, 0, 1)
+    if kind == "problem":  # falling rain, one speed per column
+        rng = np.random.default_rng(i)
+        speed, phase = rng.uniform(0.25, 0.9, w), rng.uniform(0, 1, w)
+        v = (y * w / h * 1.4 + lt * speed[None, :] + phase[None, :]) % 1.0
+        return np.where(rng.uniform(0, 1, w)[None, :] < 0.55, v ** 6, 0.0)
+    if kind == "demonstration":  # diagonal waves
+        return 0.5 + 0.5 * np.sin(9 * (x + y) - 2.6 * lt) * np.sin(4 * (x - y) + 1.3 * lt)
+    if kind == "proof":  # ripple from the top right corner
+        r = np.hypot(x - 1.0, y)
+        return np.clip(0.5 + 0.5 * np.sin(30 * r - 5 * lt) - 0.55 * r, 0, 1)
+    if kind == "payoff":  # rotating sunburst behind the stamp
+        cx, cy = 0.5, 0.33 * h / w
+        a = np.arctan2(y - cy, x - cx)
+        return np.clip((0.5 + 0.5 * np.sin(14 * a + 1.2 * lt)) * (1.25 - np.hypot(x - cx, y - cy)), 0, 1)
+    pts = [(0.5 + 0.35 * np.sin(lt * 0.7 + k * 2.1 + i), (0.4 + 0.3 * np.cos(lt * 0.5 + k * 1.7)) * h / w)
+           for k in range(3)]  # drifting blobs
+    return np.clip(sum(0.045 / ((x - px) ** 2 + (y - py) ** 2 + 0.02) for px, py in pts) / 3, 0, 1)
+
+
 NUM = re.compile(r"\d[\d,]*(?:\.\d+)?")
 PRICE = re.compile(r"[₹$€£]\s?\d[\d,]*(?:\.\d+)?")
 
@@ -206,6 +236,7 @@ class Reel:
 
     def design(self, s: dict, i: int, lt: float, dur: float, text: bool = True) -> Image.Image:
         img = self.backdrop(i, s["purpose"]).convert("RGBA")
+        self.texture(img, s, i, lt)
         t, kind = s["text"], s["purpose"]
         if text and t:
             if kind == "hook":
@@ -224,6 +255,41 @@ class Reel:
                 self.paste(img, layer, int(self.H * 0.36 - layer.height / 2 + (1 - a) * self.H * 0.03), a)
         img.alpha_composite(self.grain_layers()[int(lt * 12) % 3])
         return img
+
+    @lru_cache(maxsize=4)
+    def ascii_atlas(self, cell: int) -> np.ndarray:
+        f = font(self.fpath, int(cell * 1.1), "Bold")
+        out = np.zeros((len(ASCII), cell, cell), np.uint8)
+        for k, ch in enumerate(ASCII):
+            im = Image.new("L", (cell, cell))
+            ImageDraw.Draw(im).text((cell / 2, cell / 2), ch, font=f, fill=255, anchor="mm")
+            out[k] = np.asarray(im)
+        return out
+
+    def texture(self, img, s: dict, i: int, lt: float):
+        """Moving dither (or ASCII) layer between the backdrop and the text."""
+        tx = self.tl.get("texture") or {}
+        kind = s["purpose"]
+        if kind in ("problem", "cta") and tx.get("ascii"):
+            cell = max(8, self.W // 34)
+            cols, rows = self.W // cell + 1, self.H // cell + 1
+            idx = np.clip((field(kind, i, lt, cols, rows) * len(ASCII)).astype(int), 0, len(ASCII) - 1)
+            a = self.ascii_atlas(cell)[idx].transpose(0, 2, 1, 3).reshape(rows * cell, cols * cell)[:self.H, :self.W]
+            col = self.light
+            alpha = (a.astype(np.uint16) * tx["ascii"] // 255).astype(np.uint8)
+        elif tx.get("dither"):
+            px = max(2, self.W // 135)  # chunky dither pixels
+            w, h = self.W // px + 1, self.H // px + 1
+            f = field(kind, i, lt, w, h)
+            mask = f > np.tile(BAYER, (h // 4 + 1, w // 4 + 1))[:h, :w]
+            alpha = np.kron(mask.astype(np.uint8) * tx["dither"], np.ones((px, px), np.uint8))[:self.H, :self.W]
+            col = self.accent if kind != "payoff" else self.dark
+        else:
+            return
+        layer = np.empty((self.H, self.W, 4), np.uint8)
+        layer[..., :3] = col
+        layer[..., 3] = alpha
+        img.alpha_composite(Image.fromarray(layer, "RGBA"))
 
     @lru_cache(maxsize=32)
     def slam_layout(self, text: str):
@@ -541,18 +607,10 @@ def mix(tl: dict) -> np.ndarray:
         a = int(v["start"] * SR)
         x = x[:max(0, n - a)]
         out[a:a + len(x)] += x
-    rng = np.random.default_rng(7)
-    for fx in tl["sfx"]:
-        if fx["kind"] == "whoosh":
-            L = int(0.4 * SR)
-            noise = np.convolve(rng.standard_normal(L), np.ones(24) / 24, mode="same")
-            e = np.sin(np.linspace(0, np.pi, L)) ** 2
-            clip, a = noise * e * 2.2, int((fx["t"] - 0.25) * SR)
-        else:  # pop
-            L = int(0.09 * SR)
-            tt = np.arange(L) / SR
-            clip, a = np.sin(2 * np.pi * (900 - 6000 * tt) * tt) * np.exp(-tt * 45), int(fx["t"] * SR)
-        a = max(0, a)
+    for fx in tl["sfx"]:  # only a soft low "tick" on scenes that ask for it; no noise sweeps (user: they hurt)
+        L = int(0.07 * SR)
+        tt = np.arange(L) / SR
+        clip, a = np.sin(2 * np.pi * 180 * tt) * np.exp(-tt * 60) * np.minimum(1, tt / 0.004), max(0, int(fx["t"] * SR))
         clip = clip[:max(0, n - a)] * tl["sfx_volume"]
         out[a:a + len(clip)] += clip
     peak = np.abs(out).max() if n else 0

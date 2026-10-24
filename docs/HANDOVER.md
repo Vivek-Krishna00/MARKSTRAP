@@ -97,7 +97,10 @@ Hackathon project; every tool and model inside the product is open source / open
 - Fixed a UI race: `reel.view` now reads `busy` before the row (a run ending in between looked idle-but-unfinished).
 - **Voice = Kokoro-82M** (Apache-2.0 via kokoro-onnx MIT): voice/speed from language + voice direction, Voice (`brief.speaker`;
   `brief.voice` is Kanishk's on/off switch) and Language pickers in the brief, Hindi voices `hf_alpha`/`hm_omega`. **Motion graphics per scene purpose** (slam,
-  typewriter, card, counter+stars, price stamp, pulsing CTA, grain): demo screening 5.8 → 7.3.
+  typewriter, card, counter+stars, price stamp, pulsing CTA, grain) over moving ASCII/dither textures; whoosh
+  sweeps removed (user: hurt the ears), only a soft tick on `pop` scenes. Demo screening 5.8 → 7.3.
+- Merged Kanishk's agency/React rewrite (2026-10-25): Reel UI now lives in `site/src/app/pages/Reel.jsx`
+  (Language, Speaker, screening table added there); `brief.voice` = on/off (his), `brief.speaker` = Kokoro voice (ours).
 - **Images on Vertex: blocked.** FLUX.1-schnell and Qwen-Image exist in Model Garden only as *deploy* (hourly GPU),
   no MaaS; free-trial accounts get no GPU quota. Needs: upgrade account (credit carries over) + L4 quota for
   Vertex serving, then deploy FLUX.1-schnell on L4 (~₹70–100/h while up) with up/down commands.

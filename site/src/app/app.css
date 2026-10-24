@@ -240,3 +240,9 @@ footer.foot { display:flex; flex-wrap:wrap; gap:18px; max-width:1180px; margin:0
 footer.foot a { color:var(--dim); text-decoration:none; } footer.foot a:hover { color:var(--text); }
 .toasts { position:fixed; right:16px; bottom:16px; z-index:50; display:grid; gap:8px; max-width:min(420px, calc(100vw - 32px)); }
 .toast { padding:12px 16px; border-radius:10px; background:var(--card); border:1px solid var(--rule2); box-shadow:var(--shadow); font-size:14px; animation:fade .25s ease both; }
+
+/* reel screening table */
+table.screen { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--rule); border-radius:12px; overflow:hidden; font-size:14px; }
+table.screen th { font:600 12px var(--sans); color:var(--dim); text-align:left; padding:10px 12px; border-bottom:1px solid var(--rule2); background:var(--ice-dim); }
+table.screen td { padding:10px 12px; border-bottom:1px solid var(--rule); } table.screen td.num { font-family:var(--mono); }
+@media (max-width:640px) { table.screen { display:block; overflow-x:auto; } }

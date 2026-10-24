@@ -293,7 +293,7 @@ def template_spec(brief: dict, asset_list: list[dict]) -> dict:
             "assetType": "uploaded_asset" if ref else "motion_graphics",
             "subject": brief.get("product", ""), "action": line, "referenceAssetIds": [ref["id"]] if ref else [],
             "transitionOut": "crossfade" if purpose != "cta" else "cut",
-            "soundEffect": "whoosh" if purpose == "hook" else ""})
+            "soundEffect": ""})
     return {
         "title": head[:80] or "Reel", "objective": brief.get("objective", ""), "audience": brief.get("audience", ""),
         "platform": brief.get("platform", "instagram_reels"), "durationSeconds": D,
@@ -325,7 +325,7 @@ def _schema_hint(brief, asset_list, avail):
         "Each scene: id (scene-01...), startSeconds, endSeconds, purpose (hook|problem|demonstration|proof|payoff|cta), "
         "voiceover, onScreenText, visualDescription, assetType, subject, action, environment, composition, lighting, "
         "motion, productPlacement, emotion, negativePrompt, referenceAssetIds[], camera {shot, movement, "
-        "lensOrPerspective}, transitionOut (cut|crossfade|slide|whip), soundEffect (whoosh|pop|none), continuityNotes.\n"
+        "lensOrPerspective}, transitionOut (cut|crossfade|slide|whip), soundEffect (pop|none), continuityNotes.\n"
         f"Rules: scenes are contiguous from 0 to {brief['durationSeconds']}s, {CFG['min_scene_s']}-5 s each; the first "
         f"scene is the hook and ends by {CFG['hook_max_s']}s; the last is the cta. Voiceover fits the scene at "
         f"{CFG['wpm']} words per minute. onScreenText at most {CFG['onscreen_max_chars']} characters. "
@@ -569,8 +569,7 @@ def timeline(spec: dict, brief: dict, st: dict, asset_list: list[dict], preview:
             words += [{"w": w, "t0": round(start + a0, 3), "t1": round(min(t1, start + a1), 3)}
                       for w, a0, a1 in (au.get("words") or []) if start + a0 < t1]
     music = byrole.get("music")
-    sfx = [{"kind": "whoosh", "t": s["end"]} for s in scenes[:-1] if s["transition"] != "cut"]
-    sfx += [{"kind": "pop", "t": sc["startSeconds"]} for sc in spec["scenes"] if "pop" in sc["soundEffect"].lower()]
+    sfx = [{"kind": "pop", "t": sc["startSeconds"]} for sc in spec["scenes"] if "pop" in sc["soundEffect"].lower()]
     font = byrole.get("font")
     return {
         "size": [W, H], "fps": CFG["preview_fps"] if preview else CFG["fps"], "duration": D, "preview": preview,
@@ -582,6 +581,7 @@ def timeline(spec: dict, brief: dict, st: dict, asset_list: list[dict], preview:
         "music": {"path": music["path"] if music else str(P.music(D + 1, seed)[0]), "volume": CFG["music_volume"],
                   "duck": CFG["duck_volume"], "ramp": CFG["duck_ramp_s"]},
         "sfx": sfx, "sfx_volume": CFG["sfx_volume"], "transition_s": CFG["transition_s"],
+        "texture": {"dither": CFG["texture_dither_alpha"], "ascii": CFG["texture_ascii_alpha"]},
         "logo": byrole["logo"]["path"] if "logo" in byrole and byrole["logo"]["kind"] == "image" else None,
         "cta": spec["callToAction"]["onScreenText"], "title": spec["title"],
     }
