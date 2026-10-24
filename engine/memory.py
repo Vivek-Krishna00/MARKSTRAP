@@ -7,13 +7,24 @@ SQLite is always written, so the graph is an index over it and never the only co
 Two groups never mix (prefixed by MEMORY_NAMESPACE): "audience" holds real results (reality judges); "audience-sim" holds simulated history.
 """
 import asyncio
+import json
 import logging
 import os
+import re
 from datetime import datetime, timezone
 
 NS = os.getenv("MEMORY_NAMESPACE", "")  # e.g. "test-" for experiments; FalkorDB stores each group as its own graph
 GROUP, SIM_GROUP = NS + "audience", NS + "audience-sim"
 REAL = ("win", "flop")
+
+
+def groups(con):
+    """(real, simulated) graph groups for this campaign: one pair per organization, so clients never mix."""
+    r = con.execute("SELECT v FROM meta WHERE k='memory_group'").fetchone()
+    if not r:
+        return GROUP, SIM_GROUP
+    org = re.sub(r"[^A-Za-z0-9_-]", "", json.loads(r[0]))
+    return f"{GROUP}-{org}", f"{SIM_GROUP}-{org}"
 _g = None
 _key = None
 _loop = None
@@ -93,13 +104,13 @@ def remember(con, term: int, kind: str, text: str):
         _graph(lambda g: _run(g.add_episode(
             name=f"{kind}-t{term}", episode_body=f"Real-world {kind}: {text}",
             source_description="real campaign result", reference_time=datetime.now(timezone.utc),
-            group_id=GROUP)))
+            group_id=groups(con)[0])))
 
 
 def recall(con, query: str, k: int = 5) -> list[str]:
     """Real results only: the simulation's own history never teaches the audience what works."""
     if _on():
-        edges = _graph(lambda g: _run(g.search(query, group_ids=[GROUP], num_results=k)))
+        edges = _graph(lambda g: _run(g.search(query, group_ids=[groups(con)[0]], num_results=k)))
         if edges is not None:
             return [e.fact for e in edges]
     rows = con.execute(f"SELECT kind, text FROM memory WHERE kind IN {REAL} ORDER BY id DESC LIMIT ?", (k,)).fetchall()
@@ -116,14 +127,14 @@ def remember_feed(con, term: int, episodes: list[dict]):
         for i, ep in enumerate(episodes):
             if _graph(lambda g: _run(g.add_episode(
                     name=f"feed-t{term}-{i}", episode_body=ep["text"], source_description="simulated social feed",
-                    reference_time=datetime.now(timezone.utc), group_id=SIM_GROUP))) is None:
+                    reference_time=datetime.now(timezone.utc), group_id=groups(con)[1]))) is None:
                 break
 
 
 def recall_person(con, name: str, k: int = 3) -> list[str]:
     """What this person did on earlier feeds, so they remember across terms like MiroFish agents."""
     if _on():
-        edges = _graph(lambda g: _run(g.search(f"What did {name} do?", group_ids=[SIM_GROUP], num_results=k)))
+        edges = _graph(lambda g: _run(g.search(f"What did {name} do?", group_ids=[groups(con)[1]], num_results=k)))
         if edges is not None:
             return [e.fact for e in edges]
     rows = con.execute("SELECT text FROM memory WHERE kind LIKE ? ORDER BY id DESC LIMIT ?",

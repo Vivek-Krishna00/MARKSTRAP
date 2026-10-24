@@ -152,13 +152,18 @@ def make_ad(campaign, team):
         f"Client brief: {json.dumps(campaign.get('brief', {}))}\n"
         f"Hard constraints (language, brand rules, required info, claims you must NEVER make): "
         f"{json.dumps(campaign.get('constraints', {}))}\n"
-        f"Team:\n{brief}\n"
-        'Return {"headline": str, "body": str (the caption), "format": "image|video|carousel", '
-        '"seen": str (exactly what a person scrolling past perceives, in order, as plain text. Video: second by '
-        'second, the 0-2s hook first, what is on screen, on-screen text, voiceover/audio. Image: what is in frame '
-        'and any overlay text. Carousel: what each slide shows. No production notes), '
-        '"visual": str (art direction for rendering the image later), '
-        '"font": str, "platform": "instagram|youtube|tiktok|x|linkedin", "post_time": str}')
+        f"Team:\n{brief}\n" + AD_FORMAT)
+
+
+AD_FORMAT = (
+    'Return {"concept_name": str (2-4 words), "main_idea": str (one sentence), "headline": str, '
+    '"body": str (the caption), "format": "image|video|carousel", '
+    '"seen": str (exactly what a person scrolling past perceives, in order, as plain text. Video: second by '
+    'second, the 0-2s hook first, what is on screen, on-screen text, voiceover/audio. Image: what is in frame '
+    'and any overlay text. Carousel: what each slide shows. No production notes), '
+    '"visual": str (art direction for rendering the image later), '
+    '"font": str, "platform": "instagram|youtube|tiktok|x|linkedin", "post_time": str, '
+    '"emotion": str (the feeling it should leave), "why_it_may_work": str, "risks": str (weaknesses or risks)}')
 
 
 def judge(people, ad, lessons):
