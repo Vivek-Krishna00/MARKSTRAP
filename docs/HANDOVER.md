@@ -1,79 +1,88 @@
-# MarkStrap — Handover (2026-10-24)
+# MarkStrap — Handover (2026-10-25)
 
-Read this first, then `CLAUDE.md` and `docs/architecture.md`. Nothing is committed to git yet (repo has no commits).
+Read this first, then `CLAUDE.md` and `docs/architecture.md`. Repo: github.com/Vivek-Krishna00/MARKSTRAP, branch
+`main` (commits go straight to main; last pushed: `2b899a9`). `make test` = 29 passing.
 
 ## What this is
-Hackathon project (6-hour build, open-source tools/models must be used **inside** the product).
-- **MarkStrap** = the product: an AI marketing agency. User hands over materials → objective + constraints →
-  extracted brief → explore concepts → approve → launch pack → import real results → next experiment.
-- **Campaign Engine** = the evolutionary engine underneath (design doc "Campaign Engine — Design Notes",
-  PDF at `~/Downloads/Evolutionary Ad Swarm — Design Notes.pdf`; Decision Log D1–D71 not in the PDF).
-  Breeds/castes of maker agents, queens breed children (keeper/explorer), lessons passed at birth (nurture),
-  simulated audience only demotes, reality judges. Built on ideas from MiroFish (voice transcription says
-  "my office" = MiroFish), OASIS, Graphiti + FalkorDB.
+Hackathon project; open-source tools / open-weight models must be used **inside** the product (proprietary is
+tolerated for now where noted, e.g. Gemini, to be swapped before presenting).
+- **MarkStrap** = an AI marketing agency. User flow at `/app`: materials → goal & limits → brief → explore →
+  approve → launch sheet → import real results → next experiment.
+- **Campaign Engine** underneath (design doc "Campaign Engine — Design Notes", PDF in `~/Downloads/`; Decision Log
+  D1–D71 not in the PDF): breeds/castes of maker agents, queens breed keeper/explorer children, lessons inherited at
+  birth, simulated audience **only demotes**, **reality judges**.
+- Voice transcription says "my office" = **MiroFish**.
 - Team: user (Vivek), teammate Kanishk (design doc + `github.com/KanishkRanjan/developmental-agent-simulator`).
 
-## What is built (all working, `make test` = 29 passing)
+## What is built
 | Area | Files | Notes |
 |---|---|---|
-| Evolution loop | `engine/evolve.py` | seed, interact (lessons), produce & judge (parallel), queens reproduce, age-out to archive, demotion ratchet, boredom, import real results (per-platform ratios, z vs campaign baseline), revive, lineage |
-| Audience personality | `engine/personality.py`, `engine/personas.py`, `engine/data/profile_population_v1_model.json` | 30-facet copula (n=271,547) from Kanishk's repo; z = √h2·G + E(age) + M(age) + deltas, lazy closed form, sha256-seeded, no archetypes/MBTI. Age sampled first; LLM only names people + habits. Spec `docs/research/personality_spec.md`, ledger + `docs/PARAMETERS.md`. Twin test recovers h2 0.385 vs 0.40 |
-| Audience feed | `audience/` (Python 3.11 venv, `make audience-setup`), `engine/audience.py` | `AUDIENCE_BACKEND=oasis`: MiroFish's own OASIS runner (AGPL, copied, `audience/NOTICE`), no Zep; all ads of a term in one Twitter feed; population 100, population/15..population/5 act per round, 6 rounds (MiroFish sizing); ads judged from text only (`seen` viewer-eye script); OASIS actions → share/engage/ignore/dislike. Live-tested with Gemini: works; free tier (15 req/min) runs out during breeding — use Vertex |
-| Memory | `engine/memory.py` | Real results (group `audience`) + simulated feed history per person (group `audience-sim`, MiroFish's Zep role). SQLite always; Graphiti on FalkorDB or Neo4j (`GRAPH_DB`, local or hosted) when `MEMORY_BACKEND=graphiti`, auto-fallback to SQLite. **Pending: user's GCP graph DB endpoint + embeddings model** |
-| LLM client | `engine/llm.py` | `chat_json`; `LLM_PROVIDER=vertex` uses Google service-account token (auto-refresh) else base URL + key; 60s timeout, 3 retries; strips `<think>` |
-| Agency layer | `engine/brief.py` | materials (text/URL/PDF; images listed by name), brief extraction, next-experiment proposal |
-| Images | `engine/render.py` | renders **approved** concepts only; providers `vertex` / `gemini` / `openai` (e.g. local FLUX) |
-| API | `engine/api.py` | `/` site, `/app` user app, `/console` engine console, `/api/*`, `/renders/{id}.png` |
-| CLI | `engine/cli.py` | new-campaign, run-generation, import-results, show-lineage, set/show-dials, snapshot/rollback, `check-ai --image` |
-| User app | `web/app.html` | plain website (user rejected anything slide-like): top nav, step bar with progress line, sticky side panel (ASCII orb, guide, learned), objective cards, drop zone, concept cards, image slots, **dark + light theme** (toggle, `localStorage ms-theme`) |
-| Engine console | `web/console.html` | breeds/queens/dials/lineage view for judges |
-| Website | `site/` (React + Vite + React Bits BlurText/AnimatedContent/CountUp) → `make site` builds into `web/site/` | normal scrolling marketing site: ASCII hands hero, evidence (verified stats), 36-variation cost, how it works, before/after, architecture, closing; light/dark toggle shared with app |
-| Infra | `Makefile`, `Dockerfile`, `docker-compose.yml` (engine + FalkorDB, mounts `secrets/`), `.mcp.json` (codebase-memory-mcp), `.claude/settings.json` (plugins), `.claude/skills/evolve-campaign/` | |
+| Evolution loop | `engine/evolve.py` | seed, interact (mentor lessons), produce & judge (parallel), queens reproduce, age-out to archive, demotion ratchet, boredom, import real results (per-platform ratios, z vs campaign baseline), revive, lineage |
+| Personality | `engine/personality.py`, `engine/personas.py`, `engine/data/profile_population_v1_model.json` | 30 IPIP-NEO facets on the copula fitted to 271,547 people (Kanishk's data). z = √h2·G + E(age) + M(age) + deltas + context; lazy closed form, sha256-seeded per (id, purpose), no archetypes/MBTI/LLM. Age sampled first; LLM only adds name + habits (batched, names unique). Spec `docs/research/personality_spec.md` (user's brief, revised: 9 corrections), ledger `docs/research/personality_ledger.md`, `docs/PARAMETERS.md`. Population tests: twin h2 0.385 vs 0.40; rank-order stability ↑ with age; heritable share 0.57→0.37→0.32 |
+| Audience (default) | `evolve.judge` | one batched LLM call per ad, `audience_size` 12 sampled from the population; sees only caption + `seen` (no maker notes, no raw facets) |
+| Audience (MiroFish) | `audience/` (own Python 3.11 venv), `engine/audience.py` | `AUDIENCE_BACKEND=oasis`. MiroFish's own OASIS runner + action logger copied verbatim, profile writer copied minus Zep/MBTI, `activity.py` ported from its Zep memory updater (AGPL-3.0, see `audience/NOTICE`). `feed.py`: all ads of a term in **one shared Twitter feed**, one brand account per ad; population 100, population/15..population/5 act per round, 6 rounds (MiroFish's sizing). OASIS actions → share/engage/ignore/dislike, so scoring/shortlist/UI unchanged. Twitter only: OASIS's Reddit prompt hard-codes MBTI |
+| Text-only ads | `evolve.make_ad`, `audience.ad_text` | makers write `seen` = what a scroller perceives (video second by second, image framing + overlay, carousel slides). Nothing is rendered for the simulation |
+| Memory | `engine/memory.py` | group `audience` = real wins/flops (only thing `recall` returns); group `audience-sim` = each person's feed history (`remember_feed` / `recall_person`, MiroFish's Zep role). SQLite always written; Graphiti on FalkorDB or Neo4j (`GRAPH_DB`, local or hosted) when `MEMORY_BACKEND=graphiti`; after one failure falls back to SQLite until restart |
+| LLM client | `engine/llm.py` | `chat_json`; `LLM_PROVIDER=vertex` → service-account token, else base URL + key |
+| Agency layer | `engine/brief.py` | materials (text/URL/PDF), brief extraction, next-experiment proposal |
+| Images | `engine/render.py` | **approved** concepts only; `IMAGE_MODEL=gemini-2.5-flash-image` (Nano Banana) on Vertex for now → swap to hosted open-weight (`IMAGE_PROVIDER=openai`, e.g. FLUX) before presenting |
+| API / UI | `engine/api.py`, `web/app.html`, `web/console.html`, `site/` | `/` site, `/app`, `/console`, `/favicon.png`; site via `make site` |
+| Brand mark | `site/mark.py` → `web/mark.png`, `web/favicon.png` | Thomas attractor (b=0.133, x0=(1.1,1.1,-0.01), dt=0.05, RK4, 800k steps, yaw 45, pitch -34) density-rendered in viridis; used as favicon + nav symbol |
 
-Verified stats used on the site (sources in site footer): Adobe 2025 — 71% expect content demand ≥5x by 2027;
-56% biggest social challenge = knowing what resonates. Nielsen 2025 AMR — 54% tightening budgets; 32% measure
-cross-channel comprehensively.
+## Pending — needs the user
+1. **Graph DB on GCP**: user will send endpoints. Need: host/port or URI, username/password, **FalkorDB or Neo4j**,
+   and which **embeddings model** Graphiti should use. Then set in `.env`: `MEMORY_BACKEND=graphiti`, `GRAPH_DB`,
+   `FALKORDB_*` or `NEO4J_*`, `EMBED_BASE_URL` / `EMBED_MODEL` / `EMBED_API_KEY` (see `.env.example`).
+   Graphiti has **not** been run against a real graph yet.
+2. **Vertex AI setup** (unchanged): `.env` has `LLM_PROVIDER=vertex` but `GCP_PROJECT_ID` is empty and
+   `secrets/gcp-sa.json` is missing → fill project ID (project "My First Project"), service account with Vertex AI
+   User role, JSON key to `secrets/gcp-sa.json`, enable DeepSeek in Model Garden, `make ai-check`. Brain target:
+   `deepseek-ai/deepseek-v4.1-flash-maas`.
+3. Owner decisions: unseen ad scores neutral 0.33 and passes `send_bar` 0.3 (sim only demotes) — keep or hold back?
+   Personality [U] defaults (`disinhibition_weights`, maturation sizes, env curve, `audience.age_range` 18–45).
 
-## Current AI setup — IN PROGRESS
-Target: **Google Cloud Vertex AI** (user has ₹28.8k free-trial credit), one service account for both:
-- Brain: `deepseek-ai/deepseek-v4.1-flash-maas` (open-weight → fits open-source rule)
-- Images: `gemini-2.5-flash-image` (Nano Banana) on Vertex — proprietary placeholder; swap to a hosted open-weight model (`IMAGE_PROVIDER=openai`, e.g. FLUX) before presenting
+## Dev environment facts
+- Main venv `.venv` (Python 3.13). `uv` was installed **inside `.venv`**; it fetched Python 3.11.17 into
+  `~/.local/share/uv`. Sidecar venv `audience/.venv` (camel-oasis 0.2.5, camel-ai 0.2.78, torch) via
+  `make audience-setup` (re-runnable). **`mcp==1.24.0` is pinned** (mcp 2.x breaks camel's FastMCP import).
+- TwHIN-BERT recommender (~0.5 GB) is cached in `~/.cache/huggingface` after the first OASIS run.
+- Docker is installed; FalkorDB not running locally (`make falkordb` starts it).
+- Gemini AI Studio key in `.env` works for text via the OpenAI-compatible URL, but the **free tier is 15 requests/min**:
+  a full generation in OASIS mode hits 429 during breeding. For live tests override in the shell, never edit `.env`:
+  `set -a; . ./.env; set +a; unset LLM_PROVIDER; export LLM_MODEL=gemini-3.5-flash-lite`.
+- Live tests: use a scratch `DB_PATH` so `data/engine.db` (user's campaign) is untouched.
+- Screenshots: headless Chrome `--headless=new --screenshot` with a kill after a few seconds; `timeout` is not
+  installed on this Mac.
 
-`.env` is already set (`LLM_PROVIDER=vertex`, `GCP_LOCATION=global`, `GOOGLE_APPLICATION_CREDENTIALS=secrets/gcp-sa.json`).
-**User still must:** fill `GCP_PROJECT_ID`, enable Vertex AI API, enable DeepSeek model in Model Garden,
-create service account (role Vertex AI User) → JSON key → `secrets/gcp-sa.json`. Then run `make ai-check`
-and restart `make dev`. If ai-check fails: model not enabled / trial blocks partner models / image model name differs.
+## Measured
+- Default judge: 3-round exploration ≈ 80 LLM calls.
+- OASIS: ~30 s startup; 4 people/2 rounds ≈ 10 s per round; 15 people, 2–5 active, 2 rounds ≈ 50 s per term.
+  Full default (100 people, 6–20 active, 6 rounds) ≈ 36–120 agent calls per term — not yet run end to end (needs Vertex).
+- Live results looked right: specific ads beat generic ones, uneven exposure from the recommender, real quotes,
+  and people carried memories into the next run.
 
-History of attempts: Command Code key = valid but "Go plan doesn't include API access" (403). Gemini AI Studio key
-(`AQ.` key, kept in `.env` as fallback via OpenAI-compat URL) works for text (`gemini-3.5-flash-lite`, real run:
-26 calls/generation, 0 failures, ~81s) but free tier has **0 image quota**; `gemini-flash-latest` returned 503.
-Before the presentation: keep the brain on an open model; images either Vertex (proprietary) or FLUX on GPU PC.
+## Decisions made in this session (don't re-ask)
+- No Zep (not open source); Graphiti + a self-hosted graph DB replaces it. No fine-tuning: learning stays in prompts.
+- Copy MiroFish's code rather than reinvent; only improve personality. OASIS runs as a separate process.
+- MiroFish sizing: 100 people, population/15..population/5 active, 6 rounds.
+- Gemini is acceptable for now (brain fallback, images); swap to open-weight before presenting.
+- The pasted **Phase-2 engine spec** (employment/resumes, queen population with hybrid breeds and evolvable rules,
+  executives/companies/contracts/wages/backward pay, lower world + Loka with seasons, two currencies,
+  classifier + MiroFish hand-off + risk slice, idle fine-tune) is **parked, not built**. Fine-tuning is dropped.
 
-## Cost (measured call counts, estimated tokens)
-3-round exploration ≈ 80 calls ≈ 110k input + 44k output tokens; +2 rounds ≈ +52 calls. Judge calls dominate
-(reduce `audience_size` / `ads_per_term`). Ad spend + asset production are the real costs (human posts in MVP).
+## Not built / deferred
+Phase-2 spec above; OASIS for the makers' interact phase; video rendering (images only); guardrails/legal labelling;
+auto-posting; MiroFish's report agent / graph builder / UI.
 
-## How to run / verify
-`make setup` · `make dev` (http://localhost:8000; restart after `.env` changes) · `make test` · `make site` after
-editing `site/` · `make ai-check`. Demo with a fake LLM: scratchpad `demo_server.py` pattern (patch `engine.llm.chat_json`).
-Screenshots: headless Chrome `--screenshot` with a kill timeout (it hangs on endless canvas animations; use
-`--force-prefers-reduced-motion`). Claude-in-Chrome extension was not connected.
-
-## Not built / deferred (per design "Later")
-OASIS for the interact phase (makers; audience uses OASIS now), Phase-2 spec (employment, executives, Loka, currencies, classifier), Loka/relegation, team economy, executives, classifier judge
-(D69–D71), fine-tuning, video/reels (user chose images only), guardrails/legal labelling, auto-posting.
-
-## User preferences learned
-- Wants a **normal website**, not presentation-style (no scene counters, snap scrolling, speaker notes, fullscreen chrome).
-- Wants character in the UI (rejected "plain"), with light + dark mode.
-- Mixes Hindi/English; prefers fast action over long question rounds; hackathon time pressure.
+## User preferences
+- Normal website, never presentation-style; character in the UI; light + dark mode.
 - Visual direction: near-black #080A0E, off-white #F0F1ED, ice blue #91D0FF; Manrope / Georgia italic / IBM Plex Mono; ASCII + dither art.
+- Mixes Hindi/English, types fast; prefers action over long question rounds; hackathon time pressure.
+- Wants existing open-source projects reused ("don't reinvent the wheel").
 
 ## Open flags
-- `audience/` is AGPL-3.0 (copied MiroFish code). Fine for an open-source hackathon; keep `LICENSE` + `NOTICE`.
-- Personality [U] defaults need the owner: `disinhibition_weights`, maturation sizes, env curve, `audience.age_range`.
-- With the OASIS feed an ad nobody was shown scores neutral (0.33) and passes `send_bar` 0.3 (sim only demotes).
-- React Bits license is MIT + Commons Clause (source-available, not OSI) — swap for CSS if judges are strict.
-- `profile_population_v1_model.json` came from Kanishk's repo (no license stated) — confirm with him.
-- Docker image build untested. Homepage scrolling / theme toggle / wheel behaviour only checked via screenshots.
-- No git commits yet; user hasn't asked to commit.
+- `audience/` is AGPL-3.0 (copied MiroFish code); keep `audience/LICENSE` + `NOTICE`.
+- React Bits = MIT + Commons Clause (not OSI) — swap for CSS if judges are strict.
+- Kanishk's repo (copula data) has no licence — confirm with him.
+- Docker image build untested (now also builds the OASIS venv; heavy because of torch).
+- Graphiti's Vertex token is taken once per process (expires after ~1 h).
