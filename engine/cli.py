@@ -1,0 +1,80 @@
+"""CLI over the same engine. python -m engine.cli <command>"""
+import argparse
+import csv
+import json
+
+from . import db, evolve
+
+
+def main():
+    p = argparse.ArgumentParser(prog="engine")
+    s = p.add_subparsers(dest="cmd", required=True)
+    c = s.add_parser("new-campaign")
+    c.add_argument("goal")
+    c.add_argument("market")
+    c.add_argument("--type", choices=["direct", "brand"], default="direct")
+    g = s.add_parser("run-generation")
+    g.add_argument("-n", type=int, default=1)
+    s.add_parser("import-results").add_argument("csv")
+    s.add_parser("show-lineage").add_argument("agent_id")
+    s.add_parser("show-team").add_argument("ad_id")
+    s.add_parser("top-ads").add_argument("--type", choices=["direct", "brand"])
+    s.add_parser("revive").add_argument("agent_id")
+    d = s.add_parser("set")
+    d.add_argument("dial")
+    d.add_argument("value", type=float)
+    s.add_parser("show-dials")
+    s.add_parser("snapshot")
+    s.add_parser("rollback").add_argument("snapshot_id")
+    s.add_parser("check-ai").add_argument("--image", action="store_true", help="also render one test image")
+    a = p.parse_args()
+    con = db.connect()
+
+    if a.cmd == "check-ai":
+        import os
+        import time
+        from . import llm, render
+        t = time.time()
+        out = llm.chat_json("You are a test.", 'Return {"ok": true, "model": "<your name>"}', temperature=0)
+        print(f"brain   OK  {os.getenv('LLM_MODEL')}  {time.time() - t:.1f}s  {out}")
+        if a.image:
+            t = time.time()
+            path = render.render("check-ai", {"platform": "instagram", "visual": "A study lamp on a wooden desk, warm light"}, {}, {})
+            print(f"images  OK  {os.getenv('IMAGE_MODEL')}  {time.time() - t:.1f}s  saved {path}")
+        return
+    if a.cmd == "new-campaign":
+        db.DB_PATH.unlink(missing_ok=True)
+        con = db.connect()
+        evolve.seed_campaign(con, a.goal, a.market, a.type)
+        print("seeded", con.execute("SELECT COUNT(*) FROM agents").fetchone()[0], "agents")
+    elif a.cmd == "run-generation":
+        for _ in range(a.n):
+            print("term", evolve.run_generation(con), "done")
+    elif a.cmd == "import-results":
+        with open(a.csv) as f:
+            evolve.import_results(con, list(csv.DictReader(f)))
+    elif a.cmd == "show-lineage":
+        print(json.dumps(evolve.lineage(con, a.agent_id), indent=2))
+    elif a.cmd == "show-team":
+        print(json.dumps(db.row(con.execute("SELECT * FROM ads WHERE id=?", (a.ad_id,)).fetchone())["team"], indent=2))
+    elif a.cmd == "top-ads":
+        q = "SELECT * FROM ads" + (" WHERE ad_type=?" if a.type else "") + \
+            " ORDER BY COALESCE(real_score, sim_score) DESC LIMIT 10"
+        for r in con.execute(q, (a.type,) if a.type else ()):
+            r = db.row(r)
+            print(f"{r['id']}  t{r['term']}  sim={r['sim_score']:.2f}  real={r['real_score']}  {r['content'].get('headline')}")
+    elif a.cmd == "revive":
+        evolve.revive(con, a.agent_id)
+    elif a.cmd == "set":
+        evolve.set_dial(con, a.dial, int(a.value) if a.value.is_integer() else a.value)
+        print("applies from next term")
+    elif a.cmd == "show-dials":
+        print(json.dumps({"active": evolve.dials(con), "pending": db.get(con, "pending", {})}, indent=2))
+    elif a.cmd == "snapshot":
+        print(db.snapshot())
+    elif a.cmd == "rollback":
+        db.rollback(a.snapshot_id)
+
+
+if __name__ == "__main__":
+    main()
