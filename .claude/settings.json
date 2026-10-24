@@ -1,0 +1,17 @@
+{
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true,
+    "skill-creator@claude-plugins-official": true,
+    "ponytail@ponytail": true
+  },
+  "enableAllProjectMcpServers": true,
+  "permissions": {
+    "allow": [
+      "Bash(make test)",
+      "Bash(make gen*)",
+      "Bash(.venv/bin/python -m pytest*)",
+      "Bash(.venv/bin/python -m engine.cli*)",
+      "mcp__codebase-memory-mcp__*"
+    ]
+  }
+}
