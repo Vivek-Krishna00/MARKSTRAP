@@ -1,0 +1,26 @@
+[project]
+name = "markstrap-engine"
+version = "0.1.0"
+description = "Evolutionary campaign engine: maker swarm, simulated audience, reality as judge"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "python-multipart>=0.0.9",
+  "openai>=1.40",
+  "pyyaml>=6",
+  "numpy>=1.26",
+  "pypdf>=4",
+  "httpx>=0.27",
+  "google-auth[requests]>=2.30",
+  "graphiti-core[falkordb]>=0.17",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.setuptools]
+packages = ["engine"]
+
+[tool.setuptools.package-data]
+engine = ["data/*.json"]

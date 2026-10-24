@@ -1,0 +1,45 @@
+# Every number here is a dial. Change at runtime with `set <dial> <value>`; applies from the next term.
+dials:
+  ads_per_term: 6
+  elite_share: 0.1
+  explorer_share: 0.3
+  explorer_stress_boost: 0.2      # added to explorer_share for a caste whose median fell
+  terms_without_offspring: 3
+  audience_size: 12               # archetypes simulated per ad (one batched LLM call)
+  boredom_rate: 0.15              # score multiplier loss per recent sighting of the same style
+  boredom_recovery_terms: 2       # sightings older than this are forgotten
+  send_bar: 0.3                   # min sim score to shortlist for the real world
+  reclimb_penalty: 0.1            # added to send_bar per past demotion of the style
+  queens: 3
+  queen_poor_terms: 2             # consecutive below-median terms before a queen is culled
+  early_velocity_weight: 0.3
+  outlier_clip: 3.0               # clip normalised real scores to +/- this
+
+breeds:
+  copywriter:
+    required: true
+    castes:
+      tension: {target: 6, gate: 0.6, seed: "Write copy built on friction, tension and an open loop the reader must close."}
+      storytelling: {target: 6, gate: 0.6, seed: "Write copy as a tiny biographical story with a human at the centre."}
+  visual_maker:
+    required: true
+    castes:
+      bold: {target: 5, gate: 0.6, seed: "Describe a bold, high-contrast single-subject image that stops the scroll."}
+      candid: {target: 5, gate: 0.6, seed: "Describe a candid, real-life photo that feels unpolished and authentic."}
+  font_picker:
+    required: false
+    castes:
+      classic: {target: 3, gate: 0.8, seed: "Pick typography that feels trustworthy and timeless."}
+  posting_manager:
+    required: true
+    castes:
+      timing: {target: 4, gate: 0.7, seed: "Pick the platform and posting time where this audience is most active and the algorithm rewards this format."}
+
+# Real-world scoring: signal -> (weight, denominator). Ratios, not raw counts.
+platforms:
+  instagram: {saves: [1.0, reach], shares: [1.0, reach], completion_rate: [0.5, null]}
+  youtube: {watch_time: [1.0, impressions], avg_view_duration: [0.5, null]}
+  tiktok: {completion_rate: [1.0, null], rewatches: [0.8, impressions]}
+  x: {replies: [1.0, impressions], reposts: [1.0, impressions]}
+  linkedin: {comments: [1.0, impressions], shares: [1.0, impressions]}
+  direct: {clicks: [0.5, impressions], signups: [1.0, impressions], purchases: [2.0, impressions]}
