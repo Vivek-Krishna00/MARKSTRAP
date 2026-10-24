@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MarkStrap</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  // Theme before first paint: saved choice, else system preference.
+  try { const t = localStorage.getItem("ms-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+</script>
+<style>
+  :root {
+    --bg:#080A0E; --bg2:#0E1218; --card:#0C1016; --text:#F0F1ED; --dim:#8B9298; --faint:#4A5058;
+    --rule:rgba(240,241,237,.08); --rule2:rgba(240,241,237,.16);
+    --ice:#91D0FF; --ice-dim:rgba(145,208,255,.12); --ice-glow:rgba(145,208,255,.18); --on-ice:#06121D;
+    --good:#9FE0B8; --bad:#FF9A8A; --visual:#B9D9F2; --dot:rgba(240,241,237,.055);
+    --r-share:#91D0FF; --r-engage:#4E7FA6; --r-ignore:rgba(240,241,237,.12); --r-dislike:#FF9A8A;
+    --shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 20px 40px -24px rgba(0,0,0,.7);
+    --sans:Manrope, system-ui, sans-serif; --serif:Georgia, "Times New Roman", serif; --mono:"IBM Plex Mono", ui-monospace, monospace;
+    color-scheme:dark;
+  }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+    --bg:#F6F4EF; --bg2:#FFFFFF; --card:#FFFFFF; --text:#14171C; --dim:#5C636C; --faint:#A3A8AE;
+    --rule:rgba(20,23,28,.08); --rule2:rgba(20,23,28,.16);
+    --ice:#1D6FB5; --ice-dim:rgba(29,111,181,.09); --ice-glow:rgba(29,111,181,.14); --on-ice:#FFFFFF;
+    --good:#1E7F4F; --bad:#B9402B; --visual:#2C5F8A; --dot:rgba(20,23,28,.07);
+    --r-share:#1D6FB5; --r-engage:#7FA9CF; --r-ignore:rgba(20,23,28,.1); --r-dislike:#D9604A;
+    --shadow:0 1px 2px rgba(20,23,28,.04), 0 18px 36px -24px rgba(20,23,28,.25); color-scheme:light;
+  } }
+  :root[data-theme="light"] {
+    --bg:#F6F4EF; --bg2:#FFFFFF; --card:#FFFFFF; --text:#14171C; --dim:#5C636C; --faint:#A3A8AE;
+    --rule:rgba(20,23,28,.08); --rule2:rgba(20,23,28,.16);
+    --ice:#1D6FB5; --ice-dim:rgba(29,111,181,.09); --ice-glow:rgba(29,111,181,.14); --on-ice:#FFFFFF;
+    --good:#1E7F4F; --bad:#B9402B; --visual:#2C5F8A; --dot:rgba(20,23,28,.07);
+    --r-share:#1D6FB5; --r-engage:#7FA9CF; --r-ignore:rgba(20,23,28,.1); --r-dislike:#D9604A;
+    --shadow:0 1px 2px rgba(20,23,28,.04), 0 18px 36px -24px rgba(20,23,28,.25); color-scheme:light;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--text); }
+  body { font:400 15px/1.6 var(--sans); min-height:100vh;
+    background-image:radial-gradient(900px 420px at 70% -120px, var(--ice-glow), transparent 70%), radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size:auto, 22px 22px; background-repeat:no-repeat, repeat; transition:background-color .2s, color .2s; }
+  ::selection { background:var(--ice); color:var(--on-ice); }
+  a { color:var(--ice); }
+  .mono { font-family:var(--mono); }
+  em.s { font:italic 400 1.04em var(--serif); color:var(--ice); letter-spacing:0; }
+  :focus-visible { outline:2px solid var(--ice); outline-offset:2px; }
+
+  /* header */
+  header { position:sticky; top:0; z-index:20; height:64px; display:flex; align-items:center; gap:28px; padding:0 max(24px, calc((100vw - 1180px) / 2));
+    background:color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter:blur(10px); border-bottom:1px solid var(--rule); }
+  .wordmark { display:flex; align-items:center; gap:10px; font:800 15px var(--sans); letter-spacing:.2em; color:var(--text); text-decoration:none; }
+  .wordmark b { color:var(--ice); font-weight:800; }
+  .mark { display:block; border-radius:7px; box-shadow:0 0 14px var(--ice-glow); }
+  header nav.links { display:flex; gap:6px; }
+  header nav.links a { font:500 14px var(--sans); color:var(--dim); text-decoration:none; padding:7px 12px; border-radius:7px; }
+  header nav.links a:hover { color:var(--text); background:var(--ice-dim); } header nav.links a.on { color:var(--text); background:var(--rule); }
+  header .campaign { flex:1; text-align:right; font:13px var(--sans); color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .theme { all:unset; cursor:pointer; display:flex; align-items:center; gap:7px; font:500 13px var(--sans); color:var(--dim); border:1px solid var(--rule2); border-radius:999px; padding:6px 12px; }
+  .theme:hover { color:var(--text); border-color:var(--ice); }
+
+  /* step progress */
+  .steps-wrap { border-bottom:1px solid var(--rule); background:color-mix(in srgb, var(--bg) 70%, transparent); }
+  .steps { position:relative; display:flex; justify-content:space-between; max-width:1180px; margin:0 auto; padding:16px 24px; overflow-x:auto; }
+  .steps::before { content:""; position:absolute; left:48px; right:48px; top:31px; height:2px; background:var(--rule2); }
+  .steps::after { content:""; position:absolute; left:48px; top:31px; height:2px; width:calc((100% - 96px) * var(--p, 0)); background:linear-gradient(90deg, var(--ice), color-mix(in srgb, var(--ice) 60%, transparent)); box-shadow:0 0 10px var(--ice-glow); transition:width .4s; }
+  .steps button { all:unset; position:relative; z-index:1; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px; min-width:84px; font:500 12px var(--sans); color:var(--dim); text-align:center; }
+  .steps button i { display:grid; place-items:center; width:30px; height:30px; border-radius:50%; font:500 12px var(--mono); font-style:normal; background:var(--bg); border:1.5px solid var(--rule2); transition:all .2s; }
+  .steps button.done i { background:var(--ice); border-color:var(--ice); color:var(--on-ice); }
+  .steps button.on { color:var(--text); font-weight:700; } .steps button.on i { border-color:var(--ice); color:var(--ice); box-shadow:0 0 0 4px var(--ice-dim), 0 0 18px var(--ice-glow); }
+  .steps button:hover { color:var(--text); }
+
+  /* layout */
+  .shell { max-width:1180px; margin:0 auto; padding:40px 24px 72px; display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:44px; align-items:start; }
+  aside.side { position:sticky; top:150px; display:grid; gap:14px; }
+  @media (max-width:980px) { .shell { grid-template-columns:1fr; } aside.side { position:static; } header nav.links { display:none; } .steps button { min-width:72px; font-size:11px; } }
+
+  .eyebrow { display:inline-flex; align-items:center; gap:8px; font:500 12px var(--sans); color:var(--ice); background:var(--ice-dim); border:1px solid color-mix(in srgb, var(--ice) 30%, transparent); padding:5px 11px; border-radius:999px; margin-bottom:16px; }
+  h2 { font:700 clamp(30px, 3.4vw, 42px)/1.12 var(--sans); letter-spacing:-.03em; margin:0 0 12px; }
+  .lead { color:var(--dim); font-size:16px; max-width:62ch; margin:0 0 30px; }
+  h3.label { display:flex; align-items:center; gap:12px; font:700 15px var(--sans); color:var(--text); margin:36px 0 14px; }
+  h3.label::after { content:""; flex:1; height:1px; background:var(--rule); }
+  .label { font:600 13px var(--sans); color:var(--dim); }
+  .count { font:500 11px var(--mono); color:var(--ice); background:var(--ice-dim); padding:2px 7px; border-radius:999px; }
+
+  /* surfaces */
+  .card, .frame { background:var(--card); border:1px solid var(--rule); border-radius:12px; padding:20px; box-shadow:var(--shadow); }
+  .side .card { padding:18px; }
+  .side h4 { margin:0 0 8px; font:700 14px var(--sans); }
+  .side p { margin:0; font-size:13.5px; color:var(--dim); }
+  .side .learned p { padding:8px 0; border-bottom:1px solid var(--rule); color:var(--text); }
+  .side .learned p:last-child { border-bottom:0; }
+  .orbcard { display:grid; grid-template-columns:auto 1fr; gap:14px; align-items:center; overflow:hidden; }
+  pre.orb { margin:0; font:6px/6px var(--mono); color:var(--ice); text-shadow:0 0 6px var(--ice-glow); user-select:none; }
+  .status { font:500 11px var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--ice); }
+  .status.live::before { content:"● "; animation:blink 1.4s infinite; }
+  @keyframes blink { 50% { opacity:.3; } }
+
+  /* forms */
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:4px 24px; } @media (max-width:760px) { .grid2 { grid-template-columns:1fr; } }
+  label { display:block; font:600 13px var(--sans); color:var(--dim); margin:18px 0 7px; }
+  input, textarea { width:100%; background:var(--bg2); border:1px solid var(--rule2); color:var(--text); border-radius:8px; padding:11px 13px; font:400 15px/1.5 var(--sans); resize:vertical; transition:border-color .15s, box-shadow .15s; }
+  input:focus, textarea:focus { outline:none; border-color:var(--ice); box-shadow:0 0 0 3px var(--ice-dim); }
+  input::placeholder, textarea::placeholder { color:var(--faint); }
+  .row { display:flex; gap:10px; }
+  button.btn, button.line { display:inline-flex; align-items:center; gap:8px; border-radius:8px; font:600 14px var(--sans); cursor:pointer; padding:11px 18px; transition:all .15s; }
+  button.btn { background:var(--ice); color:var(--on-ice); border:1px solid var(--ice); box-shadow:0 6px 20px -8px var(--ice); }
+  button.btn:hover { transform:translateY(-1px); box-shadow:0 10px 26px -8px var(--ice); }
+  button.line { background:var(--bg2); color:var(--text); border:1px solid var(--rule2); }
+  button.line:hover { border-color:var(--ice); color:var(--ice); }
+  button.tiny { padding:7px 12px; font-size:13px; }
+  button:disabled { opacity:.45; cursor:default; transform:none; box-shadow:none; }
+  .actions { display:flex; gap:12px; margin-top:32px; flex-wrap:wrap; align-items:center; }
+  .note { font-size:13px; color:var(--dim); }
+  .err { color:var(--bad); font-size:13px; margin-top:10px; }
+  .empty { display:flex; align-items:center; gap:16px; font:italic 15px var(--serif); color:var(--dim); padding:18px; border:1px dashed var(--rule2); border-radius:12px; }
+  .empty pre { margin:0; font:10px/1.15 var(--mono); font-style:normal; color:var(--faint); }
+
+  /* drop zone */
+  .drop { position:relative; display:grid; grid-template-columns:auto 1fr; gap:26px; align-items:center; padding:26px 28px; border:1.5px dashed var(--rule2); border-radius:14px; cursor:pointer; background:linear-gradient(135deg, var(--ice-dim), transparent 60%), var(--card); transition:border-color .2s, transform .2s; }
+  .drop:hover, .drop.over { border-color:var(--ice); transform:translateY(-1px); }
+  .drop pre { margin:0; font:11px/1.2 var(--mono); color:var(--ice); text-shadow:0 0 8px var(--ice-glow); }
+  .drop .big { font:700 19px var(--sans); }
+  .drop .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+  .drop .chips span, .chip { font:500 11px var(--mono); color:var(--dim); border:1px solid var(--rule2); border-radius:999px; padding:3px 9px; }
+  @media (max-width:600px) { .drop { grid-template-columns:1fr; } .drop pre { display:none; } }
+  .mat { display:grid; grid-template-columns:36px 1fr auto; gap:14px; align-items:center; padding:12px 14px; border:1px solid var(--rule); border-radius:10px; margin-bottom:8px; background:var(--card); }
+  .mat .k { display:grid; place-items:center; width:36px; height:36px; border-radius:8px; background:var(--ice-dim); color:var(--ice); font:600 14px var(--mono); }
+  .mat .n { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .mat .n small { display:block; font:11px var(--mono); color:var(--dim); text-transform:uppercase; letter-spacing:.08em; }
+
+  /* objectives */
+  .objs { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; } @media (max-width:760px) { .objs { grid-template-columns:1fr 1fr; } }
+  .obj { position:relative; padding:14px 14px 13px; border:1px solid var(--rule2); border-radius:12px; cursor:pointer; background:var(--card); transition:all .15s; }
+  .obj b { display:block; font:700 14.5px var(--sans); margin:8px 0 2px; } .obj span { font-size:12.5px; color:var(--dim); }
+  .obj .g { font:500 17px var(--mono); color:var(--ice); }
+  .obj:hover { border-color:var(--ice); transform:translateY(-1px); }
+  .obj.on { border-color:var(--ice); background:linear-gradient(160deg, var(--ice-dim), var(--card)); box-shadow:0 0 0 3px var(--ice-dim); }
+  .obj.on::after { content:"✓"; position:absolute; top:10px; right:12px; color:var(--ice); font-weight:700; }
+
+  .q { border-left:3px solid var(--ice); padding:6px 0 6px 14px; margin:0 0 10px; font:italic 17px var(--serif); }
+
+  /* concepts */
+  .legend { display:flex; gap:16px; font-size:12px; color:var(--dim); margin:0 0 14px; flex-wrap:wrap; } .legend i { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:6px; vertical-align:middle; }
+  .concept { display:grid; grid-template-columns:minmax(0,1fr) 220px; gap:24px; padding:22px; border:1px solid var(--rule); border-radius:14px; margin-bottom:14px; background:var(--card); box-shadow:var(--shadow); transition:border-color .15s; }
+  .concept:hover { border-color:var(--rule2); }
+  @media (max-width:760px) { .concept { grid-template-columns:1fr; } }
+  .concept .idx { display:none; }
+  .concept h4 { font:700 21px/1.25 var(--sans); letter-spacing:-.015em; margin:10px 0 8px; }
+  .concept p { margin:0 0 12px; color:var(--dim); }
+  .concept.approved { border-color:var(--ice); box-shadow:0 0 0 3px var(--ice-dim), var(--shadow); }
+  .concept.approved h4::before { content:"✓ "; color:var(--ice); }
+  .concept.rejected { opacity:.4; }
+  .tags { display:flex; gap:6px; flex-wrap:wrap; }
+  .tags span { font:500 11px var(--mono); color:var(--dim); border:1px solid var(--rule2); border-radius:999px; padding:2px 9px; text-transform:lowercase; }
+  .tags .ice { color:var(--ice); border-color:color-mix(in srgb, var(--ice) 40%, transparent); background:var(--ice-dim); }
+  .tags .good { color:var(--good); border-color:currentColor; } .tags .bad { color:var(--bad); border-color:currentColor; }
+  .visual { font:12px/1.6 var(--mono); color:var(--visual); background:var(--ice-dim); border-radius:8px; padding:10px 12px; }
+  .meter { border-left:1px solid var(--rule); padding-left:20px; } @media (max-width:760px) { .meter { border-left:0; padding-left:0; } }
+  .meter .big { font:500 34px/1 var(--mono); margin-top:8px; } .meter .big small { font:12px var(--sans); color:var(--dim); margin-left:6px; }
+  .react { display:flex; height:6px; border-radius:3px; overflow:hidden; margin:12px 0 8px; background:var(--r-ignore); }
+  .quote { font:italic 14.5px/1.45 var(--serif); margin-top:12px; } .quote span { display:block; font:11px var(--mono); font-style:normal; color:var(--dim); margin-top:4px; }
+  .engine { margin:0 0 24px; }
+  .cycle { display:flex; flex-wrap:wrap; gap:6px; } .cycle span { font:500 11px var(--mono); color:var(--dim); border:1px solid var(--rule); border-radius:999px; padding:3px 9px; } .cycle span.on { color:var(--on-ice); background:var(--ice); border-color:var(--ice); }
+  .bar { height:6px; border-radius:3px; background:var(--rule2); margin:16px 0 10px; overflow:hidden; } .bar i { display:block; height:100%; background:var(--ice); box-shadow:0 0 10px var(--ice); transition:width .6s; }
+
+  /* tables, copy, misc */
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--rule); border-radius:12px; overflow:hidden; }
+  th { font:600 12px var(--sans); color:var(--dim); text-align:left; padding:12px 14px; border-bottom:1px solid var(--rule2); background:var(--ice-dim); }
+  td { padding:13px 14px; border-bottom:1px solid var(--rule); } td.num { font-family:var(--mono); }
+  .copy { white-space:pre-wrap; font:500 16px/1.55 var(--sans); padding:12px 14px; border-left:3px solid var(--ice); background:var(--ice-dim); border-radius:0 8px 8px 0; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:20px; } @media (max-width:760px) { .two { grid-template-columns:1fr; } }
+  ul.clean { list-style:none; padding:0; margin:0; } ul.clean li { padding:8px 0; border-bottom:1px solid var(--rule); } ul.clean li::before { content:"→ "; color:var(--ice); }
+  .pulse { animation:p 1.6s ease-in-out infinite; } @keyframes p { 50% { opacity:.45; } }
+  .fade { animation:fade .35s ease both; } @keyframes fade { from { opacity:0; transform:translateY(6px); } }
+  @media (prefers-reduced-motion: reduce) { .pulse, .fade, .status.live::before { animation:none; } }
+
+  .render { margin-top:14px; }
+  .render img { display:block; width:100%; max-width:420px; border-radius:10px; border:1px solid var(--rule2); box-shadow:var(--shadow); }
+  .render-empty { display:grid; place-items:center; max-width:420px; aspect-ratio:4/5; border:1.5px dashed var(--rule2); border-radius:10px; color:var(--dim); font-size:13px;
+    background:repeating-linear-gradient(135deg, transparent 0 8px, var(--ice-dim) 8px 9px); }
+  footer.site { display:flex; flex-wrap:wrap; gap:20px; max-width:1180px; margin:0 auto; padding:26px 24px 40px; border-top:1px solid var(--rule); font-size:13px; color:var(--dim); }
+  footer.site a { color:var(--dim); text-decoration:none; } footer.site a:hover { color:var(--text); }
+</style>
+</head>
+<body>
+<header>
+  <a class="wordmark" href="/"><img class="mark" src="/favicon.png" alt="" width="28" height="28"><span>MARK<b>STRAP</b></span></a>
+  <nav class="links"><a href="/">Home</a><a href="/app" class="on">Campaigns</a><a href="/console">Engine console</a></nav>
+  <span class="campaign" id="campaignName"></span>
+  <button class="theme" id="theme" aria-label="Switch colour theme"></button>
+</header>
+<div class="steps-wrap"><nav class="steps" id="steps" aria-label="Campaign steps"></nav></div>
+<div class="shell"><main id="view"></main><aside class="side" id="side" aria-label="Campaign"></aside></div>
+<footer class="site"><span>© MarkStrap</span><a href="/">Home</a><a href="/console">Engine console</a><span style="margin-left:auto">Built on open-source models and memory</span></footer>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const api = async (p, o) => { const r = await fetch(p, o); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText); return r.json(); };
+const post = (p, body) => api(p, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body ?? {})});
+const pad = n => String(n).padStart(2, "0");
+const STEPS = ["Materials", "Goal & limits", "Brief", "Explore", "Approve", "Launch", "Results & next"];
+const OBJECTIVES = ["awareness", "qualified inquiries", "registrations", "enrollment", "visits", "installations", "sales", "evidence of demand"];
+const CYCLE = ["Understand", "Explore", "Evaluate", "Produce", "Approve", "Launch", "Measure", "Improve"];
+const COLORS = {share:"var(--r-share)", engage:"var(--r-engage)", ignore:"var(--r-ignore)", dislike:"var(--r-dislike)"};
+const OBJ_INFO = {
+  "awareness": ["◎", "More of the right people know you exist"], "qualified inquiries": ["✉", "Calls, forms and DMs from real prospects"],
+  "registrations": ["✎", "Sign-ups for an event, demo or trial"], "enrollment": ["◆", "Seats filled in a course or batch"],
+  "visits": ["⌂", "Footfall, bookings or site visits"], "installations": ["⇩", "App installs from the right audience"],
+  "sales": ["₹", "Orders and revenue"], "evidence of demand": ["⚑", "Proof people want it before you build"]};
+const GUIDE = [
+  "Add anything you already have. We read pages, PDFs and notes, and keep them for future campaigns.",
+  "Your objective fixes how success is scored. Constraints become hard rules for every concept.",
+  "Check our reading of your materials. We only ask for details that block a campaign.",
+  "Maker agents draft concepts, a simulated audience built from real personality data reacts, and the strongest are bred forward.",
+  "Nothing goes live without your approval. Rejected ideas are archived, not erased.",
+  "Publish the approved pieces, then bring the numbers back with the results sheet.",
+  "Real results override the simulation, teach the audience model and set up the next experiment."];
+const KIND = {file:"▤", link:"⌁", note:"✎"};
+const STACK = ` .---------.
+ | ≡≡≡≡≡   |-.
+ | ≡≡≡     | |-.
+ | ≡≡≡≡    | | |
+ '---------' | |
+   '---------' |
+     '---------'`;
+let S, step = 0, form = {objective:"", constraints:{}}, still = false;
+try { form = JSON.parse(localStorage.getItem("ms-form")) || form; still = localStorage.getItem("ms-still") === "1"; } catch {}
+const saveForm = () => { try { localStorage.setItem("ms-form", JSON.stringify(form)); } catch {} };
+const reduced = () => still || matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+async function load(goto) {
+  S = await api("/api/state");
+  if (goto !== undefined) { step = goto; history.replaceState(null, "", `#${goto}`); }
+  else if (location.hash) step = +location.hash.slice(1) || 0;
+  else if (step === 0 && S.campaign) step = auto();
+  render();
+  if (S.busy) setTimeout(() => load(), 2500);
+}
+function auto() {  // land returning users on the furthest meaningful step
+  if (S.ads.some(a => a.real_score != null)) return 6;
+  if (Object.values(S.approvals).includes("approved")) return 4;
+  return S.term > 0 || S.busy ? 3 : 2;
+}
+const approvedAds = () => S.ads.filter(a => S.approvals[a.id] === "approved");
+const kicker = t => `<div class="eyebrow">◆ ${t}</div>`;
+
+function render() {
+  const done = [S.org.length > 0, !!S.draft, !!S.campaign, S.term > 0, approvedAds().length > 0, S.ads.some(a => a.real_score != null), S.insights.length > 0];
+  $("#steps").innerHTML = STEPS.map((s, i) => `<button class="${i === step ? "on" : ""} ${done[i] && i !== step ? "done" : ""}" onclick="go(${i})" ${i === step ? 'aria-current="step"' : ""}><i>${done[i] && i !== step ? "✓" : i + 1}</i>${s}</button>`).join("");
+  $("#steps").style.setProperty("--p", step / (STEPS.length - 1));
+  $("#campaignName").textContent = S.campaign ? S.campaign.goal : "";
+  stopOrb();
+  $("#side").innerHTML = sidePanel();
+  const v = $("#view"); v.classList.remove("fade"); void v.offsetWidth; v.classList.add("fade");
+  v.innerHTML = [materials, goal, briefView, exploreView, approveView, launchView, resultsView][step]();
+  bind();
+  window.scrollTo({top:0});
+}
+function go(i) { step = i; history.replaceState(null, "", `#${i}`); render(); }
+
+function sidePanel() {
+  const st = S.busy ? `<span class="status live">Exploring · round ${(S.progress?.done || 0) + 1}</span>`
+    : S.campaign ? `<span class="status">${S.term} rounds · ${S.ads.length} concepts</span>` : `<span class="status">No campaign yet</span>`;
+  const items = [...S.insights.slice(0, 1).flatMap(i => i.what_worked || []),
+    ...S.memory.slice(0, 4).map(m => `${m.kind === "win" ? "▲" : "▼"} ${m.text.split(" / ")[0]}`)];
+  return `<div class="card orbcard"><pre class="orb" id="orb" aria-hidden="true"></pre><div>${st}<h4 style="margin-top:6px">${esc(S.campaign?.brief?.offering || S.campaign?.goal || "Your campaign engine")}</h4><p>${S.personas.length ? `${S.personas.length} simulated people in the audience` : "Starts when you confirm a brief"}</p></div></div>
+  <div class="card"><h4>What happens here</h4><p>${GUIDE[step]}</p></div>
+  <div class="card learned"><h4>What we've learned</h4>${items.length ? items.map(l => `<p>${esc(l)}</p>`).join("") : `<p>Real results you bring back appear here and shape every future campaign.</p>`}</div>
+  <div class="card"><h4>Materials on file <span class="count">${S.org.length}</span></h4><p>Reused across campaigns. <a href="#0" onclick="go(0);return false">Manage</a></p></div>`;
+}
+function learnedBlock() { return ""; }
+
+// 01 ─ Materials
+function materials() {
+  return `${kicker("Bring what you have")}
+  <h2 class="rv">What are we <em class="s">promoting?</em></h2>
+  <p class="lead rv">Hand over what you already have: course details, brochures, product pages, past campaigns, brand guidelines, photography. It's kept for every future campaign.</p>
+  <div class="drop" id="drop"><pre aria-hidden="true">${STACK}</pre><div><div class="big">Drop files, or click to choose</div><div class="note">Brochures, course pages, past campaigns, brand guides, photos</div><div class="chips"><span>pdf</span><span>txt</span><span>md</span><span>images</span><span>footage</span></div></div><input type="file" id="file" multiple hidden></div>
+  <div class="grid2 rv">
+    <div><label>Website or page link</label><div class="row"><input id="url" placeholder="https://"><button class="line" id="addUrl">Add</button></div></div>
+    <div><label>Or in your own words</label><div class="row"><input id="note" placeholder="What it is, who it's for, what makes it different"><button class="line" id="addNote">Add</button></div></div>
+  </div>
+  <div id="matErr" class="err"></div>
+  <h3 class="label">Your materials <span class="count">${S.org.length}</span></h3>
+  ${S.org.length ? S.org.map((m, i) => `<div class="mat"><span class="k">${KIND[m.kind] || "▤"}</span><span class="n">${esc(m.name)}<small>${m.kind}</small></span><button class="line tiny" onclick="rmMat(${i})">Remove</button></div>`).join("") : `<div class="empty"><pre aria-hidden="true">  _____\n |     |\n | ? ? |\n |_____|</pre>Nothing yet. Coaching centres usually start with a course page and a brochure.</div>`}
+  ${learnedBlock()}
+  <div class="actions"><button class="btn" onclick="go(1)" ${S.org.length ? "" : "disabled"}>Continue</button></div>`;
+}
+async function addMat(fd) {
+  $("#matErr").textContent = "";
+  try { await api("/api/materials", {method:"POST", body:fd}); load(0); } catch (e) { $("#matErr").textContent = e.message; }
+}
+async function rmMat(i) { await api(`/api/materials/${i}`, {method:"DELETE"}); load(0); }
+
+// 02 ─ Goal & constraints
+function goal() {
+  const c = form.constraints;
+  const f = (k, l, ph, type = "text") => `<div><label>${l}</label><input data-c="${k}" type="${type}" value="${esc(c[k] || "")}" placeholder="${ph}"></div>`;
+  return `${kicker("Objective and limits")}
+  <h2 class="rv">What outcome do you <em class="s">want?</em></h2>
+  <p class="lead rv">It decides where people land and how success is measured. It stays fixed for the campaign so every result is comparable.</p>
+  <div class="objs">${OBJECTIVES.map(o => `<div class="obj ${form.objective === o ? "on" : ""}" data-obj="${o}" role="button" tabindex="0"><span class="g">${OBJ_INFO[o][0]}</span><b>${o[0].toUpperCase() + o.slice(1)}</b><span>${OBJ_INFO[o][1]}</span></div>`).join("")}</div>
+  <h3 class="label">Constraints</h3>
+  <div class="grid2">${f("budget", "Budget", "₹50,000 for the first month")}${f("geography", "Geography", "Within 10 km of the centre")}
+  ${f("start", "Start", "", "date")}${f("end", "End", "", "date")}
+  ${f("language", "Language", "English, some Hindi")}${f("required", "Must include", "Fees, batch timings, address")}</div>
+  <label>Brand rules</label><textarea data-c="brand_rules" rows="2" placeholder="Tone, colours, words you never use">${esc(c.brand_rules || "")}</textarea>
+  <label>Claims we must never make</label><textarea data-c="restricted_claims" rows="2" placeholder="No guaranteed ranks or results">${esc(c.restricted_claims || "")}</textarea>
+  <div id="goalErr" class="err"></div>
+  <div class="actions"><button class="btn" id="mkBrief" ${form.objective ? "" : "disabled"}>Prepare the brief</button><span class="note">We read your materials and organise them · about a minute</span></div>`;
+}
+
+// 03 ─ Brief
+function briefView() {
+  if (!S.draft) return `${kicker("Brief")}<h2>Set a goal <em class="s">first.</em></h2><button class="btn" onclick="go(1)">Back</button>`;
+  const b = S.draft.brief, list = x => (x || []).join("\n");
+  const t = (k, l, v, rows = 2) => `<label>${l}</label><textarea data-b="${k}" rows="${rows}">${esc(v)}</textarea>`;
+  return `${kicker("Extracted brief")}
+  <h2 class="rv">Here's what we <em class="s">understood.</em></h2>
+  <p class="lead rv">Correct anything that's off. Objective: <span class="mono" style="color:var(--ice)">${esc(S.draft.objective)}</span> · ${b.available === "unbuilt" ? "not built yet, so people land on a transparent early-access page" : "available now"}.</p>
+  ${(b.missing || []).length ? `<div class="frame rv" style="margin-bottom:40px"><div class="label" style="margin-bottom:16px">Only these details are missing</div>${b.missing.map(q => `<p class="q">${esc(q)}</p>`).join("")}<textarea id="answers" rows="2" placeholder="Answer here, or leave blank and we'll work with what we have"></textarea></div>` : ""}
+  <div class="grid2 rv"><div>${t("offering", "What we're promoting", b.offering)}${t("audience", "Who it's for", b.audience)}${t("goal", "Campaign goal", b.goal)}</div>
+  <div>${t("key_messages", "Key messages · one per line", list(b.key_messages), 3)}${t("proof_points", "Proof points · one per line", list(b.proof_points), 3)}
+  ${t("destination", "Where people land", b.destination, 1)}${t("success_metric", "Success looks like", b.success_metric, 1)}</div></div>
+  <div id="briefErr" class="err"></div>
+  <div class="actions"><button class="btn" id="confirm">Confirm brief & explore</button><span class="note">3 rounds: concepts drafted → tested on a simulated audience → strongest bred forward</span></div>`;
+}
+
+// 04 ─ Explore
+function concept(a, i, actions) {
+  const c = a.content, n = {share:0, engage:0, ignore:0, dislike:0};
+  (a.reactions || []).forEach(r => n[r.reaction] = (n[r.reaction] || 0) + 1);
+  const tot = Object.values(n).reduce((x, y) => x + y, 0) || 1;
+  const q = (a.reactions || []).find(r => r.reaction === "share") || (a.reactions || [])[0];
+  const st = S.approvals[a.id] || "";
+  return `<article class="concept ${st} rv">
+    <div class="idx">${pad(i + 1)}</div>
+    <div>
+      <div class="tags"><span class="ice">${esc(c.platform)}</span><span>${esc(c.format || "post")}</span><span>${esc(c.post_time)}</span>${a.shortlisted ? '<span class="good">shortlisted</span>' : ""}${a.real_score != null ? `<span class="${a.real_score > 0 ? "good" : "bad"}">real ${a.real_score > 0 ? "above" : "below"} baseline</span>` : ""}</div>
+      <h4>${esc(c.headline)}</h4><p>${esc(c.body)}</p>
+      <div class="visual">VISUAL — ${esc(c.visual)}<br>TYPE — ${esc(c.font)}</div>
+      ${st === "approved" ? imageSlot(a) : ""}
+      ${actions ? `<div class="actions" style="margin-top:20px">
+        <button class="${st === "approved" ? "btn" : "line"} tiny" onclick="setAp('${a.id}','${st === "approved" ? "" : "approved"}')">${st === "approved" ? "Approved" : "Approve"}</button>
+        <button class="line tiny" onclick="setAp('${a.id}','${st === "rejected" ? "" : "rejected"}')">${st === "rejected" ? "Undo" : "Reject"}</button></div>` : ""}
+    </div>
+    <div class="meter">
+      <div class="label">Simulated response</div>
+      <div class="big" style="margin-top:10px">${Math.round(n.share / tot * 100)}%<small>would share</small></div>
+      <div class="react">${Object.entries(n).map(([k, v]) => `<i style="width:${v / tot * 100}%;background:${COLORS[k]}"></i>`).join("")}</div>
+      <div class="note">${n.engage} engage · ${n.ignore} scroll past · ${n.dislike} annoyed</div>
+      ${q ? `<div class="quote">“${esc(q.parts?.copy?.why || q.parts?.visual?.why)}”<span>— ${esc(q.persona)}</span></div>` : ""}
+    </div>
+  </article>`;
+}
+function exploreView() {
+  if (!S.campaign) return `${kicker("Explore")}<h2>Confirm a brief <em class="s">first.</em></h2>`;
+  const p = S.progress || {};
+  const best = [...S.ads].sort((a, b) => b.sim_score - a.sim_score).slice(0, 9);
+  const active = S.busy ? Math.min(3, 1 + (p.done || 0) % 3) : -1;
+  return `${kicker("Explore and evaluate")}
+  <h2 class="rv">Ideas, given a <em class="s">fair test.</em></h2>
+  <p class="lead rv">${S.term} rounds · ${S.ads.length} concepts tested on ${S.personas.length} simulated people sampled from real personality data. Simulation helps shortlist. It doesn't prove demand; only real results do.</p>
+  <div class="engine card">
+    <div>
+      <div class="cycle">${CYCLE.map((s, i) => `<span class="${i === active ? "on" : ""}">${s}</span>`).join("")}</div>
+      ${S.busy ? `<div class="bar"><i style="width:${(p.done || 0) / (p.total || 1) * 100}%"></i></div><div class="note pulse">Round ${(p.done || 0) + 1} of ${p.total} · makers drafting, audience reacting, strongest bred forward</div>` : `<div class="note" style="margin-top:14px">Approve the concepts worth a real test. Rejected ideas aren't erased; reality can bring them back.</div>`}
+      ${p.error ? `<div class="err">Exploration stopped: ${esc(p.error)}</div>` : ""}
+    </div>
+  </div>
+  <div class="legend"><span><i style="background:${COLORS.share}"></i>share</span><span><i style="background:${COLORS.engage}"></i>engage</span><span><i style="background:var(--r-ignore);outline:1px solid var(--rule2)"></i>scroll past</span><span><i style="background:${COLORS.dislike}"></i>annoyed</span></div>
+  ${best.map((a, i) => concept(a, i, true)).join("") || `<p class="empty">Concepts appear after the first round.</p>`}
+  <div class="actions"><button class="btn" onclick="go(4)" ${approvedAds().length ? "" : "disabled"}>Review approved · ${pad(approvedAds().length)}</button><button class="line" id="more" ${S.busy ? "disabled" : ""}>Explore 2 more rounds</button></div>`;
+}
+
+// 05 ─ Approve
+function approveView() {
+  const ap = approvedAds();
+  return `${kicker("Approval")}
+  <h2 class="rv">Your call, <em class="s">always.</em></h2>
+  <p class="lead rv">These become a real experiment. Nothing is published without you.</p>
+  ${ap.map((a, i) => concept(a, i, true)).join("") || `<p class="empty">Approve concepts in Explore first.</p>`}
+  <div class="actions"><button class="btn" onclick="go(5)" ${ap.length ? "" : "disabled"}>Prepare launch pack</button><button class="line" onclick="go(3)">Back to concepts</button></div>`;
+}
+
+// 06 ─ Launch
+function launchView() {
+  const ap = approvedAds(), b = S.campaign?.brief || {};
+  return `${kicker("Launch pack")}
+  <h2 class="rv">Ready to <em class="s">go live.</em></h2>
+  <p class="lead rv">Publish each piece on its platform at the suggested time. People land on <span style="color:var(--text)">${esc(b.destination || "your destination page")}</span>. In this version every live piece passes through your hands.</p>
+  ${ap.map((a, i) => { const c = a.content; return `<section class="frame rv" style="margin-bottom:28px">
+    <div class="tags" style="justify-content:space-between"><span class="ice">${pad(i + 1)} · ${esc(c.platform)} · ${esc(c.post_time)}</span><span>${a.id}</span></div>
+    <h3 class="label" style="margin-top:22px">Copy</h3><div class="copy">${esc(c.headline)}\n\n${esc(c.body)}</div>
+    <button class="line tiny" style="margin-top:14px" onclick="copyAd(${i}, this)">Copy text</button>
+    <h3 class="label">Image</h3>${imageSlot(a)}
+    <h3 class="label">Visual brief for your designer</h3><div class="visual">${esc(c.visual)}<br>TYPE — ${esc(c.font)}</div></section>`; }).join("") || `<p class="empty">Approve concepts first.</p>`}
+  <div class="actions"><a href="/api/launch.csv"><button class="btn" type="button">Download results sheet</button></a><button class="line" onclick="go(6)">I've posted · add results</button></div>
+  <p class="note" style="margin-top:16px">Fill the sheet from each platform's insights after a few hours or days. Early engagement counts extra.</p>`;
+}
+
+// 07 ─ Results & next
+function resultsView() {
+  const tested = S.ads.filter(a => a.real_score != null).sort((a, b) => b.real_score - a.real_score);
+  const ins = S.insights[0];
+  return `${kicker("Measure and improve")}
+  <h2 class="rv">What <em class="s">really</em> happened.</h2>
+  <p class="lead rv">Real results override the simulation, teach the simulated audience, and shape the next experiment. A weak creative isn't proof the offering has no market.</p>
+  <div class="drop frame rv" id="resDrop"><div class="big">Upload the results sheet</div><div class="note" style="margin-top:6px">CSV · from the launch step</div><input type="file" id="resFile" accept=".csv" hidden></div>
+  <div id="resErr" class="err"></div>
+  ${tested.length ? `<h3 class="label">Results against your own baseline</h3><table><tr><th>Concept</th><th>Platform</th><th>Simulated</th><th>Real</th></tr>
+    ${tested.map(a => `<tr><td>${esc(a.content.headline)}</td><td class="num">${esc(a.content.platform)}</td><td class="num">${a.sim_score.toFixed(2)}</td><td class="num" style="color:${a.real_score > 0 ? "var(--good)" : "var(--bad)"}">${a.real_score > 0 ? "+" : ""}${a.real_score.toFixed(2)}σ</td></tr>`).join("")}</table>
+    <div class="actions"><button class="btn" id="next">Propose the next experiment</button></div>` : ""}
+  ${ins ? `<h3 class="label">Next experiment</h3><div class="two">
+    <div><div class="label" style="margin-bottom:8px">Worked</div><ul class="clean">${(ins.what_worked || []).map(x => `<li>${esc(x)}</li>`).join("")}</ul>
+      <div class="label" style="margin:24px 0 8px">Didn't</div><ul class="clean">${(ins.what_didnt || []).map(x => `<li>${esc(x)}</li>`).join("")}</ul>
+      <p class="note" style="margin-top:16px">${esc(ins.caution)}</p></div>
+    <div class="frame"><p style="font:italic 22px/1.35 var(--serif);margin:0 0 14px">${esc(ins.next?.hypothesis)}</p><p style="color:var(--dim)">${esc(ins.next?.change)}</p>
+      <p class="note">AUDIENCE — ${esc(ins.next?.audience)}<br>CHANNEL — ${esc(ins.next?.channel)}<br>SUCCESS — ${esc(ins.next?.success_metric)}</p>
+      <button class="btn" id="runNext" ${S.busy ? "disabled" : ""}>Run this experiment</button></div></div>` : ""}
+  ${learnedBlock()}`;
+}
+
+function imageSlot(a) {
+  const has = S.renders.includes(a.id);
+  return `<div class="render">${has ? `<img src="/renders/${a.id}.png?v=${S.term}" alt="Generated image for: ${esc(a.content.headline)}">` : `<div class="render-empty">No image yet</div>`}
+    <div class="row" style="margin-top:10px;align-items:center"><button class="line tiny" onclick="renderAd('${a.id}', this)">${has ? "Regenerate image" : "Generate image"}</button>
+    ${has ? `<a class="note" href="/renders/${a.id}.png" download="${a.id}.png">Download</a>` : ""}</div><div class="err" id="rerr-${a.id}"></div></div>`;
+}
+async function renderAd(id, btn) {
+  btn.disabled = true; btn.textContent = "Generating…"; btn.classList.add("pulse");
+  try { await post(`/api/ads/${id}/render`); load(step); }
+  catch (e) { $(`#rerr-${id}`).textContent = e.message; btn.disabled = false; btn.textContent = "Try again"; btn.classList.remove("pulse"); }
+}
+function copyAd(i, btn) { const c = approvedAds()[i].content; navigator.clipboard.writeText(`${c.headline}\n\n${c.body}`); btn.textContent = "Copied"; }
+async function setAp(id, status) { await post(`/api/ads/${id}/approval`, {status}); load(step); }
+
+// ASCII orb: a lit sphere with ordered (Bayer) dithering
+let orbTimer = null;
+function stopOrb() { clearInterval(orbTimer); orbTimer = null; }
+function startOrb() {
+  const el = $("#orb"); if (!el) return;
+  const W = 26, H = 13, CH = " .·:-=+*#%@", B = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+  let t = 0;
+  const frame = () => {
+    const lx = Math.cos(t), lz = Math.sin(t) * .6 + .5, ly = -.45, ln = Math.hypot(lx, ly, lz);
+    let out = "";
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const nx = (x - W / 2 + .5) / (W / 2), ny = (y - H / 2 + .5) / (H / 2), r = nx * nx + ny * ny;
+        if (r > 1) { out += (x + y * 3) % 17 === 0 && Math.abs(r - 1.35) < .3 ? "·" : " "; continue; }
+        const nz = Math.sqrt(1 - r), d = Math.max(0, (nx * lx + ny * ly + nz * lz) / ln);
+        const v = Math.min(CH.length - 1, Math.floor((d * .85 + .1 + (B[y % 4][x % 4] / 16 - .5) * .18) * CH.length));
+        out += CH[Math.max(0, v)];
+      }
+      out += "\n";
+    }
+    el.textContent = out;
+    t += .045;
+  };
+  frame();
+  if (!reduced()) orbTimer = setInterval(frame, 70);
+}
+
+function bind() {
+  startOrb();
+  const drop = $("#drop");
+  if (drop) {
+    drop.onclick = () => $("#file").click();
+    drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+    drop.ondragleave = () => drop.classList.remove("over");
+    const send = files => [...files].reduce((p, f) => p.then(() => { const fd = new FormData(); fd.append("file", f); return addMat(fd); }), Promise.resolve());
+    drop.ondrop = e => { e.preventDefault(); send(e.dataTransfer.files); };
+    $("#file").onchange = e => send(e.target.files);
+    $("#addUrl").onclick = () => { const fd = new FormData(); fd.append("url", $("#url").value); addMat(fd); };
+    $("#addNote").onclick = () => { const fd = new FormData(); fd.append("text", $("#note").value); addMat(fd); };
+  }
+  document.querySelectorAll("[data-obj]").forEach(el => { el.onclick = () => { form.objective = el.dataset.obj; saveForm(); render(); };
+    el.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); el.click(); } }; });
+  document.querySelectorAll("[data-c]").forEach(el => el.oninput = () => { form.constraints[el.dataset.c] = el.value; saveForm(); });
+  const busyBtn = (b, label) => { b.disabled = true; b.textContent = label; b.classList.add("pulse"); };
+  if ($("#mkBrief")) $("#mkBrief").onclick = async e => {
+    busyBtn(e.target, "Reading your materials…");
+    try { await post("/api/brief", form); load(2); } catch (err) { $("#goalErr").textContent = err.message; e.target.disabled = false; e.target.textContent = "Prepare the brief"; e.target.classList.remove("pulse"); }
+  };
+  if ($("#confirm")) $("#confirm").onclick = async e => {
+    const b = {...S.draft.brief};
+    document.querySelectorAll("[data-b]").forEach(el => b[el.dataset.b] = ["key_messages", "proof_points"].includes(el.dataset.b) ? el.value.split("\n").filter(Boolean) : el.value);
+    busyBtn(e.target, "Building your simulated audience…");
+    try { await post("/api/brief/confirm", {brief:b, answers:$("#answers")?.value || ""}); await post("/api/explore?rounds=3"); load(3); }
+    catch (err) { $("#briefErr").textContent = err.message; e.target.disabled = false; e.target.textContent = "Confirm brief & explore"; e.target.classList.remove("pulse"); }
+  };
+  if ($("#more")) $("#more").onclick = async () => { await post("/api/explore?rounds=2"); load(3); };
+  const rd = $("#resDrop");
+  if (rd) {
+    rd.onclick = () => $("#resFile").click();
+    $("#resFile").onchange = async e => {
+      const fd = new FormData(); fd.append("file", e.target.files[0]);
+      try { await api("/api/results", {method:"POST", body:fd}); load(6); } catch (err) { $("#resErr").textContent = err.message; }
+    };
+  }
+  if ($("#next")) $("#next").onclick = async e => {
+    busyBtn(e.target, "Reading the results…");
+    try { await post("/api/next"); load(6); } catch (err) { $("#resErr").textContent = err.message; e.target.disabled = false; }
+  };
+  if ($("#runNext")) $("#runNext").onclick = async () => { await post("/api/explore?rounds=2"); load(3); };
+}
+
+const isLight = () => (document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")) === "light";
+const paintTheme = () => { $("#theme").textContent = isLight() ? "◑ Dark" : "◐ Light"; };
+$("#theme").onclick = () => {
+  const t = isLight() ? "dark" : "light";
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("ms-theme", t); } catch {}
+  paintTheme();
+};
+paintTheme();
+load();
+</script>
+</body>
+</html>
