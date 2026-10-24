@@ -239,3 +239,16 @@ main { height: auto; overflow: visible; scroll-snap-type: none; }
 .theme { all: unset; cursor: pointer; font: 500 13px var(--sans); color: var(--dim); border: 1px solid var(--rule2); border-radius: 999px; padding: 6px 12px; }
 .theme:hover { color: var(--text); border-color: var(--ice); }
 .cta { background: var(--ice); color: var(--on-ice); } .cta:hover { background: var(--text); color: var(--bg); }
+
+/* Scroll reveals (motion.jsx): start hidden, play once when .in is added. */
+.rv-word, .rv-rise { opacity: 0; }
+.rv-word { display: inline-block; white-space: pre; }
+.rv-blurtext.in .rv-word, .rv-rise.in { animation: rv-in var(--t, .7s) cubic-bezier(.215, .61, .355, 1) var(--d, 0s) both; }
+@keyframes rv-in {
+  from { opacity: 0; transform: translateY(var(--y, 0)); filter: blur(var(--b, 0)); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rv-word, .rv-rise { opacity: 1; }
+  .rv-blurtext.in .rv-word, .rv-rise.in { animation: none; }
+}

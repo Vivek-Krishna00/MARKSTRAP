@@ -20,7 +20,7 @@ endpoint, Graphiti + FalkorDB, FastAPI, SQLite. No proprietary APIs in `engine/`
 - `audience/` + `engine/audience.py` — MiroFish's OASIS feed as the audience (`AUDIENCE_BACKEND=oasis`, `make audience-setup`); copied AGPL code, no Zep
 - `engine/memory.py` — audience memory (SQLite default, Graphiti when `MEMORY_BACKEND=graphiti`)
 - `engine/llm.py` — single `chat_json` call; tests monkeypatch it
-- `site/` (React + Vite + React Bits) — the MarkStrap website, built by `make site` into `web/site/`, served at `/`
+- `site/` (React + Vite, reveals in `site/src/motion.jsx`, no animation library) — the MarkStrap website, built by `make site` into `web/site/`, served at `/`
 - `web/app.html` (at `/app`) — the user flow: materials → goal & limits → brief → explore → approve → launch → results & next
 - `engine/brief.py` — materials ingestion (text/links/PDF), brief extraction, next-experiment proposal
 - `engine/api.py` + `web/console.html` (at `/console`) — engine console; `engine/cli.py` — same ops from the terminal

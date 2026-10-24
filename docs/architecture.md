@@ -67,7 +67,8 @@ on-screen text and audio, image framing and overlay text, carousel slides). Both
 Real wins/flops live in group `audience` and are the only thing `memory.recall` returns: simulated history never
 teaches the audience what works. SQLite is always written; Graphiti (FalkorDB or Neo4j, local or hosted) is an
 index over it and falls back to SQLite if unreachable.
-Measured: ~30 s startup; 15 people, 2–5 active, 2 rounds ≈ 50 s per term with Gemini.
+Measured (DeepSeek V4.1 Flash on Vertex, Graphiti on FalkorDB, nomic-embed-text): 100 people seeded in 101 s;
+one full generation with the 100-person feed (6 rounds) ≈ 440 s.
 
 ## Cut for the hackathon (from the design notes' MVP brief)
 - OASIS feed for the interact phase (makers copying each other) → still one mentor LLM call per term. OASIS is used for the audience only.

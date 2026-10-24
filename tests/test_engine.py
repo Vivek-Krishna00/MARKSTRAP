@@ -167,7 +167,8 @@ def test_agency_flow_end_to_end(tmp_path, monkeypatch):
 
     from engine import render
     monkeypatch.setattr(render, "OUT", tmp_path / "renders")
-    monkeypatch.setattr(render, "_gemini", lambda prompt, aspect, vertex=False: b"\x89PNG fake")
+    monkeypatch.setattr(render, "_openai", lambda prompt, aspect: b"\x89PNG fake")
+    monkeypatch.setenv("IMAGE_BASE_URL", "http://image-model.test/v1")
     other = next(a["id"] for a in c.get("/api/state").json()["ads"] if a["id"] != ad)
     assert c.post(f"/api/ads/{other}/render").status_code == 400  # only approved concepts are rendered
     assert c.post(f"/api/ads/{ad}/render").json()["url"] == f"/renders/{ad}.png"

@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import BlurText from './reactbits/BlurText.jsx';
-import AnimatedContent from './reactbits/AnimatedContent.jsx';
-import CountUp from './reactbits/CountUp.jsx';
+import { AnimatedContent, BlurText, CountUp } from './motion.jsx';
 import { DitherPhoto, Hands, Orb, ParticleGrid } from './ascii.jsx';
 
 const REDUCED = typeof window !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/* React Bits, configured once for the whole site. Under reduced motion the content renders static. */
+/* Scroll reveals (motion.jsx), configured once for the whole site. Under reduced motion the content renders static. */
 const Title = ({ text, className = 'h1', as: Tag = 'h2', delay = 60 }) =>
   REDUCED ? <Tag className={className}>{text}</Tag>
     : <Tag className={className} aria-label={text}><BlurText text={text} delay={delay} stepDuration={0.4} blur={10} distance={18} className="blur" /></Tag>;

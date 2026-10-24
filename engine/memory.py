@@ -4,16 +4,18 @@ MEMORY_BACKEND=graphiti: Graphiti on a graph database, recalled by meaning (need
   GRAPH_DB=falkordb (FALKORDB_HOST/PORT/USERNAME/PASSWORD) or neo4j (NEO4J_URI/USER/PASSWORD) — local or hosted.
 Otherwise, or if the graph is unreachable: SQLite, newest first, and the LLM judges similarity.
 SQLite is always written, so the graph is an index over it and never the only copy.
-Two groups never mix: "audience" holds real results (reality judges); "audience-sim" holds simulated history.
+Two groups never mix (prefixed by MEMORY_NAMESPACE): "audience" holds real results (reality judges); "audience-sim" holds simulated history.
 """
 import asyncio
 import logging
 import os
 from datetime import datetime, timezone
 
-GROUP, SIM_GROUP = "audience", "audience-sim"
+NS = os.getenv("MEMORY_NAMESPACE", "")  # e.g. "test-" for experiments; FalkorDB stores each group as its own graph
+GROUP, SIM_GROUP = NS + "audience", NS + "audience-sim"
 REAL = ("win", "flop")
 _g = None
+_key = None
 _loop = None
 _down = False  # ponytail: after one failure, SQLite for the rest of the process; restart to retry the graph
 log = logging.getLogger(__name__)
@@ -39,26 +41,33 @@ def _driver():
 
 
 def _graphiti():
-    global _g
-    if _g is None:
+    global _g, _key
+    from . import llm
+    if os.getenv("LLM_PROVIDER") == "vertex":
+        key, base = llm.gcp_token(), llm.vertex_base() + "/endpoints/openapi"
+    else:
+        key, base = os.getenv("LLM_API_KEY", "none"), os.getenv("LLM_BASE_URL")
+    if _g is None or key != _key:  # Vertex tokens expire hourly: rebuild the client when it refreshes
         from graphiti_core import Graphiti
+        from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
         from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
         from graphiti_core.llm_client import LLMConfig
         from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
 
-        from . import llm
-        if os.getenv("LLM_PROVIDER") == "vertex":  # ponytail: token taken once; rebuild _g if runs outlive an hour
-            key, base = llm.gcp_token(), llm.vertex_base() + "/endpoints/openapi"
-        else:
-            key, base = os.getenv("LLM_API_KEY", "none"), os.getenv("LLM_BASE_URL")
-        _g = Graphiti(
+        first = _g is None
+        cfg = LLMConfig(api_key=key, base_url=base, model=os.getenv("LLM_MODEL"))
+        _g, _key = Graphiti(
             graph_driver=_driver(),
-            llm_client=OpenAIGenericClient(LLMConfig(api_key=key, base_url=base, model=os.getenv("LLM_MODEL"))),
+            llm_client=OpenAIGenericClient(cfg),
+            cross_encoder=OpenAIRerankerClient(cfg),  # default one wants OPENAI_API_KEY; default search doesn't call it
             embedder=OpenAIEmbedder(OpenAIEmbedderConfig(
                 api_key=os.getenv("EMBED_API_KEY") or key, base_url=os.getenv("EMBED_BASE_URL") or base,
                 embedding_model=os.getenv("EMBED_MODEL", "nomic-embed-text"))),
-        )
-        _run(_g.build_indices_and_constraints())
+        ), key
+        if first:
+            _run(_g.build_indices_and_constraints())
+            import atexit
+            atexit.register(lambda: _run(_g.close()))  # close on our loop, before the daemon loop dies
     return _g
 
 

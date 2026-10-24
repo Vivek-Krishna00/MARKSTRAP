@@ -1,7 +1,7 @@
 audience/ contains code copied from MiroFish (https://github.com/666ghj/MiroFish, commit 7657031,
 licensed AGPL-3.0, see LICENSE in this directory). This directory is therefore AGPL-3.0.
 
-Copied verbatim:
+Copied verbatim (one change: the fallback model name is an open-weight model):
   run_parallel_simulation.py   <- backend/scripts/run_parallel_simulation.py
   action_logger.py             <- backend/scripts/action_logger.py
 Copied with removals:
@@ -15,5 +15,5 @@ Ported (translated to English, Zep client/threads removed):
 New (MarkStrap):
   feed.py                      one shared feed per term: writes profiles + config, runs the copied runner,
                                reads the OASIS sqlite back as per-person reactions.
-Not used: Zep Cloud (proprietary), MiroFish's graph builder, report agent and web UI.
+Not used: Zep Cloud (replaced by Graphiti on FalkorDB), MiroFish's graph builder, report agent and web UI.
 Simulation engine: OASIS by CAMEL-AI (camel-oasis, Apache-2.0).

@@ -1,4 +1,4 @@
-# MiroFish backend dependencies (backend/requirements.txt), minus zep-cloud (not open source) and flask/PDF/UI deps.
+# MiroFish backend dependencies (backend/requirements.txt), minus zep-cloud (replaced by Graphiti) and flask/PDF/UI deps.
 camel-oasis==0.2.5
 camel-ai==0.2.78
 openai>=1.0.0
