@@ -27,6 +27,8 @@ def main():
     s.add_parser("snapshot")
     s.add_parser("rollback").add_argument("snapshot_id")
     s.add_parser("check-ai").add_argument("--image", action="store_true", help="also render one test image")
+    e = s.add_parser("reel-eval", help="proof: render bad / placeholder / real-photo variants, judge each blind")
+    e.add_argument("--repeats", type=int, default=3)
     r = s.add_parser("reel-demo", help="render the demo reel fixture end to end (no paid providers)")
     r.add_argument("--final", action="store_true", help="also export the 1080x1920 MP4")
     a = p.parse_args()
@@ -43,6 +45,10 @@ def main():
             t = time.time()
             path = render.render("check-ai", {"platform": "instagram", "visual": "A study lamp on a wooden desk, warm light"}, {}, {})
             print(f"images  OK  {os.getenv('IMAGE_MODEL')}  {time.time() - t:.1f}s  saved {path}")
+        return
+    if a.cmd == "reel-eval":
+        from . import reel_eval
+        reel_eval.run(con, a.repeats)
         return
     if a.cmd == "reel-demo":
         from . import reel

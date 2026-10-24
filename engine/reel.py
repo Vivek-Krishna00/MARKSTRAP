@@ -24,13 +24,15 @@ CFG = evolve.CFG["reel"]
 ROOT = Path(P.CACHE).parent
 DEMO = Path(__file__).resolve().parent / "data" / "reel_demo.json"
 CRITERIA = ["hook", "clarity", "visual_relevance", "brand_consistency", "product_accuracy", "continuity", "pacing",
-            "caption_readability", "audio_balance", "cta_clarity", "platform_fit"]
+            "caption_readability", "audio_balance", "cta_clarity", "platform_fit", "visual_quality"]
+VISUAL = ["hook", "visual_relevance", "brand_consistency", "product_accuracy", "continuity", "caption_readability",
+          "platform_fit", "visual_quality"]  # what the frames can show; the vision judge scores only these
 ROLES = ["product", "character", "location", "style", "logo", "music", "font", "reference_reel"]
 KINDS = {"image": {".png", ".jpg", ".jpeg", ".webp"}, "video": {".mp4", ".mov", ".webm", ".m4v"},
          "audio": {".mp3", ".wav", ".m4a", ".ogg"}, "font": {".ttf", ".otf"}}
 PLATFORMS = {"instagram": "instagram_reels", "tiktok": "tiktok", "youtube": "youtube_shorts"}
 DEFAULT_COLORS = ["#080A0E", "#F0F1ED", "#91D0FF"]
-STAGES = ["assets", "voice", "captions", "critic", "preview"]
+STAGES = ["assets", "voice", "captions", "critic", "preview", "review"]
 
 # ---------- schema (validated; everything the model returns goes through it) ----------
 
@@ -647,12 +649,12 @@ def critique(spec, st, brief, asset_list) -> dict:
         raw = P.text_json(CRITIC, f"Brief: {json.dumps(brief)}\nHook: {json.dumps(spec['hook'])}\n"
                           f"CTA: {json.dumps(spec['callToAction'])}\nScenes: {json.dumps(brief_scenes)}\n"
                           f"Measured problems: {json.dumps(rules)}\n"
-                          f'Return {{"scores": {{{", ".join(f"{c!r}: 0-10" for c in CRITERIA)}}}, "issues": '
+                          f'Return {{"scores": {{{", ".join(f"{c!r}: 0-10" for c in CRITERIA[:-1])}}}, "issues": '
                           '[{"criterion", "sceneId", "target": "scene|caption|audio|transition", "severity": '
                           '"major|minor", "problem", "fix"}]}', temperature=0.2)
         c = Critique.model_validate(raw)
         ids = {s["id"] for s in spec["scenes"]}
-        scores = {k: min(scores[k], c.scores[k]) for k in CRITERIA}
+        scores = {k: scores[k] if k == "visual_quality" else min(scores[k], c.scores[k]) for k in CRITERIA}
         seen = {(i["criterion"], i["sceneId"]) for i in rules}
         issues += [{**i.model_dump(), "source": "model"} for i in c.issues
                    if (i.sceneId in ids or i.sceneId is None) and (i.criterion, i.sceneId) not in seen]
@@ -695,6 +697,132 @@ def revise_scene(spec: dict, sid: str, issues: list[dict], brief: dict, asset_id
         if i.get("maxWords"):  # measured overrun: guarantee the fit even if the model's rewrite didn't
             new["voiceover"] = _clip_words(new["voiceover"], i["maxWords"])
     return new
+
+
+# ---------- 7. visual review: judged from the rendered frames, not the script ----------
+
+def keyframes(mp4: Path, spec: dict) -> list[dict]:
+    """Two hook frames plus each scene's midpoint (at most `review_frames`), as small JPEGs."""
+    import imageio_ffmpeg
+    sc = spec["scenes"]
+    picks = [{"sceneId": sc[0]["id"], "label": "hook", "t": 0.5},
+             {"sceneId": sc[0]["id"], "label": "hook", "t": max(0.6, sc[0]["endSeconds"] - 0.3)}]
+    picks += [{"sceneId": s["id"], "label": s["purpose"], "t": round((s["startSeconds"] + s["endSeconds"]) / 2, 2)}
+              for s in sc[1:]]
+    picks = picks[:CFG["review_frames"]]
+    for f in picks:
+        r = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-v", "error", "-ss", str(f["t"]), "-i", str(mp4),
+                            "-frames:v", "1", "-vf", "scale=360:640", "-f", "image2pipe", "-vcodec", "mjpeg", "-"],
+                           capture_output=True, timeout=60)
+        f["jpg"] = r.stdout
+    return [f for f in picks if f["jpg"]]
+
+
+def visual_checks(frames: list[dict], spec: dict, st: dict) -> tuple[list[dict], dict]:
+    """Measured, no model: do the scenes actually look different, and is there any real imagery at all?"""
+    import io
+    import numpy as np
+    from PIL import Image
+    mids = {}
+    for f in frames:  # one frame per scene (the later hook frame stands for scene 1)
+        mids[f["sceneId"]] = np.asarray(Image.open(io.BytesIO(f["jpg"])).convert("RGB").resize((36, 64)), float) / 255
+    a = list(mids.values())
+    pairs = [np.abs(a[i] - a[j]).mean() for i in range(len(a)) for j in range(i + 1, len(a))]
+    variety = float(np.mean(pairs)) if pairs else 0.0
+    kinds = [(st.get(s["id"], {}).get("asset") or {}).get("kind") for s in spec["scenes"]]
+    real = sum(k in ("image", "video") for k in kinds) / max(1, len(kinds))
+    out = []
+    if variety < CFG["visual_variety_min"]:
+        out.append({"criterion": "visual_quality", "sceneId": None, "target": "scene", "severity": "major",
+                    "problem": f"scenes look alike (visual variety {variety:.2f} < {CFG['visual_variety_min']})",
+                    "fix": "give each scene its own image, footage or layout", "source": "measured"})
+    if real < CFG["real_imagery_min"]:
+        out.append({"criterion": "visual_quality", "sceneId": None, "target": "scene",
+                    "severity": "major" if real == 0 else "minor",
+                    "problem": f"only {real:.0%} of scenes show real photos or footage", "source": "measured",
+                    "fix": "upload product/lifestyle shots or connect an image model"})
+    return out, {"variety": round(variety, 3), "real_imagery": round(real, 2)}
+
+
+JUDGE = ("You are a blunt short-form video critic and, at the same time, a 20-year-old who scrolls Instagram for "
+         "hours. You get frames from one vertical Reel, in order, plus its script. Judge only what is visible and "
+         "said. Anchors: 10 = indistinguishable from a top brand's Reel shot with real footage; 7 = a good "
+         "creator-made Reel; 5 = an obvious template or slideshow; 3 = amateur, repetitive or hard to read; "
+         "1 = broken. Most AI-made Reels land between 3 and 6. Politeness ruins this review.")
+
+
+def tile(frames: list[dict], max_images: int) -> tuple[list[bytes], int]:
+    """Some vision endpoints cap images per request (Llama 4 on Vertex: 5): put frames side by side to fit."""
+    import io
+    from PIL import Image
+    per = -(-len(frames) // max_images)
+    if per <= 1:
+        return [f["jpg"] for f in frames], 1
+    out = []
+    for i in range(0, len(frames), per):
+        ims = [Image.open(io.BytesIO(f["jpg"])).convert("RGB") for f in frames[i:i + per]]
+        sheet = Image.new("RGB", (sum(x.width for x in ims), max(x.height for x in ims)))
+        x = 0
+        for im in ims:
+            sheet.paste(im, (x, 0))
+            x += im.width
+        buf = io.BytesIO()
+        sheet.save(buf, "JPEG", quality=85)
+        out.append(buf.getvalue())
+    return out, per
+
+
+def judge_frames(frames: list[dict], spec: dict, brief: dict, temperature: float = 0.2) -> dict:
+    """Blind visual judgement: the judge never sees our scores, the variant name or the maker's notes."""
+    shots = "\n".join(f"Frame {i + 1}: {f['sceneId']} ({f['label']}) at {f['t']}s" for i, f in enumerate(frames))
+    images, per = tile(frames, CFG["vision_max_images"])
+    if per > 1:
+        shots += f"\n(Frames are tiled {per} per image, left to right, in frame order.)"
+    script = "\n".join(f"{s['id']} {s['startSeconds']}-{s['endSeconds']}s VO: {s['voiceover']} | text: "
+                       f"{s['onScreenText']}" for s in spec["scenes"])
+    raw = P.vision_json(
+        JUDGE, f"Product: {brief.get('product')}\nAudience: {brief.get('audience')}\nPlatform: {spec['platform']}\n"
+        f"{shots}\nScript:\n{script}\n"
+        f'Return {{"scores": {{{", ".join(f"{c!r}: 0-10" for c in VISUAL)}}}, "stopScroll": 0-10 (would you stop '
+        'scrolling in the first 2 seconds), "verdict": str (one blunt sentence), "issues": [{"sceneId", '
+        '"criterion", "severity": "major|minor", "problem", "fix"}]}',
+        images, temperature)
+    scores = {c: max(0.0, min(10.0, float(v))) for c, v in (raw.get("scores") or {}).items() if c in VISUAL}
+    ids = {s["id"] for s in spec["scenes"]}
+    issues = []
+    for i in raw.get("issues") or []:
+        try:
+            x = Issue.model_validate(i)
+        except ValidationError:
+            continue
+        if x.sceneId in ids or x.sceneId is None:
+            issues.append({**x.model_dump(), "source": "vision"})
+    return {"scores": scores, "stopScroll": float(raw.get("stopScroll") or 0), "verdict": str(raw.get("verdict", ""))[:300],
+            "issues": issues}
+
+
+def visual_review(spec: dict, brief: dict, st: dict, mp4: Path) -> dict:
+    frames = keyframes(mp4, spec)
+    issues, stats = visual_checks(frames, spec, st)
+    scores = {"visual_quality": 8.0}
+    for i in issues:
+        scores["visual_quality"] -= 3 if i["severity"] == "major" else 1
+    out = {"scores": scores, "issues": issues, "stats": stats, "by": "measured"}
+    try:
+        j = judge_frames(frames, spec, brief)
+        out["scores"] = {c: min(scores.get(c, 10.0), j["scores"].get(c, 10.0)) for c in set(scores) | set(j["scores"])}
+        out.update(stopScroll=j["stopScroll"], verdict=j["verdict"], issues=issues + j["issues"],
+                   by="measured+" + P.available()["vision"])
+    except (P.NotConfigured, ValueError, KeyError) as e:
+        out["note"] = f"frames not judged by a model: {str(e)[:160]}"
+    out["scores"] = {k: round(max(0.0, v), 1) for k, v in out["scores"].items()}
+    return out
+
+
+def merge_visual(crit: dict, vis: dict) -> dict:
+    scores = {k: min(v, vis["scores"].get(k, 10.0)) for k, v in crit["scores"].items()}
+    return {**crit, "scores": scores, "overall": round(sum(scores.values()) / len(scores), 1),
+            "issues": crit["issues"] + vis["issues"], "visual": {k: v for k, v in vis.items() if k != "issues"}}
 
 
 # ---------- pipeline ----------
@@ -844,6 +972,9 @@ def produce(con, reel_id: str):
         save(con, reel_id, critic={**crit, "history": history}, stage="preview")
         out = folder(reel_id) / "preview.mp4"
         compose(timeline(spec, brief, scene_state(con, reel_id), al, True, seed), out)
+        save(con, reel_id, stage="review")
+        crit = merge_visual(crit, visual_review(spec, brief, scene_state(con, reel_id), out))
+        save(con, reel_id, critic={**crit, "history": history})
         renders = {**(load(con, reel_id).get("renders") or {}), "preview": out.name, "preview_at": time.time()}
         renders.pop("final", None)  # a changed reel invalidates the old export
         save(con, reel_id, status="produced", stage=None, renders=renders)

@@ -471,8 +471,8 @@ async function setAp(id, status) { await post(`/api/ads/${id}/approval`, {status
 const REEL_GUIDE = "The director plans every scene before anything is generated. Edit freely: only the scenes you change are re-made, and nothing paid is generated twice.";
 const ASSET_TYPES = {motion_graphics:"Motion graphics", uploaded_asset:"Your upload", generated_image:"Generated image", generated_video:"Generated video", stock_video:"Stock (Openverse)"};
 const ROLES = {product:"Product", character:"Character / spokesperson", location:"Location", style:"Style reference", logo:"Logo", music:"Music track", font:"Font", reference_reel:"Reference Reel"};
-const REEL_STAGES = ["storyboard", "assets", "voice", "captions", "critic", "preview", "final"];
-const CRIT_NAMES = {hook:"First 3 seconds", clarity:"Message clarity", visual_relevance:"Visual relevance", brand_consistency:"Brand consistency", product_accuracy:"Product accuracy", continuity:"Scene continuity", pacing:"Pacing", caption_readability:"Caption readability", audio_balance:"Audio balance", cta_clarity:"Call to action", platform_fit:"Platform fit"};
+const REEL_STAGES = ["storyboard", "assets", "voice", "captions", "critic", "preview", "review", "final"];
+const CRIT_NAMES = {hook:"First 3 seconds", clarity:"Message clarity", visual_relevance:"Visual relevance", brand_consistency:"Brand consistency", product_accuracy:"Product accuracy", continuity:"Scene continuity", pacing:"Pacing", caption_readability:"Caption readability", audio_balance:"Audio balance", cta_clarity:"Call to action", platform_fit:"Platform fit", visual_quality:"Visual quality"};
 
 function reelSlot(a) {
   const r = (S.reels || []).find(x => x.ad_id === a.id);
@@ -566,6 +566,7 @@ function productionBlock() {
     ${R.error ? `<div class="err">${esc(R.error)}. Finished scenes are kept; fix the cause and press Resume.</div>` : ""}
     <div class="actions" style="margin-top:16px"><button class="btn" id="rProduce" ${R.busy ? "disabled" : ""}>${label}</button></div></div>
   ${c ? `<h3 class="label">Critic <span class="count">${c.overall}/10 · ${esc(c.by)}</span></h3>
+    ${c.visual ? `<div class="visual" style="margin-bottom:14px">FRAMES JUDGED BY — ${esc(c.visual.by)}${c.visual.stopScroll != null ? ` · STOP-SCROLL ${c.visual.stopScroll}/10` : ""} · SCENE VARIETY ${c.visual.stats?.variety} · REAL IMAGERY ${Math.round((c.visual.stats?.real_imagery || 0) * 100)}%${c.visual.verdict ? `<br>“${esc(c.visual.verdict)}”` : ""}${c.visual.note ? `<br>${esc(c.visual.note)}` : ""}</div>` : ""}
     <div class="scores">${Object.entries(c.scores).map(([k, v]) => `<div class="score ${v < 6 ? "low" : ""}"><span>${CRIT_NAMES[k] || k}</span><b>${v.toFixed(0)}</b><i style="--w:${v * 10}%"></i></div>`).join("")}</div>
     ${(c.history || []).map(h => `<p class="note" style="margin-top:12px">Round ${h.round}: repaired ${h.repaired.map(esc).join(", ")} automatically.</p>`).join("")}
     ${c.issues.length ? `<ul class="clean" style="margin-top:12px">${c.issues.slice(0, 8).map(i => `<li>${i.sceneId ? `<span class="mono">${esc(i.sceneId)}</span> ` : ""}${esc(i.problem)}${i.fix ? ` <span class="note">→ ${esc(i.fix)}</span>` : ""}</li>`).join("")}</ul>` : `<p class="note">No open issues.</p>`}` : ""}

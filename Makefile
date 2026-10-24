@@ -2,7 +2,7 @@ PY := .venv/bin/python
 -include .env
 export
 
-.PHONY: help setup audience-setup reel-setup reel-demo dev test up down logs gen falkordb index clean site ai-check
+.PHONY: help setup audience-setup reel-setup reel-demo reel-eval dev test up down logs gen falkordb index clean site ai-check
 
 help:  ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -26,6 +26,9 @@ reel-setup:  ## Reel Director voice: Piper TTS (open source) + one English voice
 
 reel-demo:  ## render the demo reel fixture with no paid provider (scratch DB): make reel-demo FINAL=1
 	DB_PATH=data/reel-demo.db REEL_TEXT_PROVIDER=mock $(PY) -m engine.cli reel-demo $(if $(FINAL),--final)
+
+reel-eval:  ## proof that the Reel judge ranks broken < placeholder < real photos (needs VISION_PROVIDER, ~₹2)
+	DB_PATH=data/reel-eval.db $(PY) -m engine.cli reel-eval --repeats $(or $(N),3)
 
 site:  ## build the website (site/ -> web/site, served at /)
 	cd site && npm install --no-audit --no-fund && npm run build

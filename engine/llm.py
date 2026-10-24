@@ -3,6 +3,7 @@
 LLM_PROVIDER=vertex → open models served on Google Cloud Vertex AI (e.g. DeepSeek MaaS), authenticated with a
 service account / ADC token that is refreshed automatically. Anything else → plain base URL + API key from .env.
 """
+import base64
 import json
 import os
 import re
@@ -29,8 +30,8 @@ def gcp_token() -> str:
         return _creds.token
 
 
-def vertex_base() -> str:
-    loc = os.getenv("GCP_LOCATION", "global")
+def vertex_base(loc: str | None = None) -> str:
+    loc = loc or os.getenv("GCP_LOCATION", "global")
     host = "aiplatform.googleapis.com" if loc == "global" else f"{loc}-aiplatform.googleapis.com"
     return f"https://{host}/v1/projects/{os.environ['GCP_PROJECT_ID']}/locations/{loc}"
 
@@ -56,8 +57,31 @@ def chat_json(system: str, user: str, temperature: float = 0.8) -> dict:
         messages=[{"role": "system", "content": system + "\nReply with a single JSON object only."},
                   {"role": "user", "content": user}],
     )
-    text = re.sub(r"<think>.*?</think>", "", r.choices[0].message.content or "", flags=re.S)
+    return _json(r.choices[0].message.content)
+
+
+def _json(content: str | None) -> dict:
+    text = re.sub(r"<think>.*?</think>", "", content or "", flags=re.S)
     m = re.search(r"\{.*\}", text, re.S)
     if not m:
         raise ValueError(f"LLM returned no JSON: {text[:200]}")
     return json.loads(m.group(0))
+
+
+def vision_json(system: str, user: str, images: list[bytes], temperature: float = 0.2) -> dict:
+    """chat_json plus JPEG frames, for an open-weight vision model. VISION_PROVIDER=vertex → Llama 4 on Vertex
+    (VISION_LOCATION, pay per token); else any OpenAI-compatible VISION_BASE_URL (e.g. Ollama + qwen2.5vl)."""
+    opts = dict(timeout=float(os.getenv("VISION_TIMEOUT", "120")), max_retries=int(os.getenv("LLM_RETRIES", "3")))
+    if os.getenv("VISION_PROVIDER") == "vertex":
+        base = vertex_base(os.getenv("VISION_LOCATION", "us-east5")) + "/endpoints/openapi"
+        client = OpenAI(base_url=base, api_key=gcp_token(), **opts)
+    else:
+        client = OpenAI(base_url=os.getenv("VISION_BASE_URL"), api_key=os.getenv("VISION_API_KEY", "none"), **opts)
+    parts = [{"type": "text", "text": user}] + [
+        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(b).decode()}}
+        for b in images]
+    r = client.chat.completions.create(
+        model=os.getenv("VISION_MODEL", "meta/llama-4-maverick-17b-128e-instruct-maas"), temperature=temperature,
+        messages=[{"role": "system", "content": system + "\nReply with a single JSON object only."},
+                  {"role": "user", "content": parts}])
+    return _json(r.choices[0].message.content)
