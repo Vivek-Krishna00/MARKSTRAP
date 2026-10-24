@@ -114,7 +114,8 @@ def test_dials_apply_next_term_and_are_logged(con):
 def test_audience_personality_comes_from_fitted_model_not_llm(con):
     from engine import personas
     people = db.get(con, "personas")
-    assert len(people) == evolve.dials(con)["audience_size"]
+    assert len(people) == evolve.dials(con)["population"]
+    assert len({p["name"] for p in people}) == len(people)  # named in batches, unique (they key memory)
     phrases = {b for pair in personas.BEHAVIORS.values() for b in pair}
     assert all(any(p in t for p in phrases) for person in people for t in person["tendencies"])
     personas_ok = __import__("subprocess").run(
@@ -175,22 +176,31 @@ def test_agency_flow_end_to_end(tmp_path, monkeypatch):
 
 
 def test_oasis_feed_path_scores_with_existing_vocabulary(con, monkeypatch):
-    from engine import audience
+    from engine import audience, memory
     seen = {}
 
-    def fake_evaluate(ads, people, lessons, rounds, workdir=None):
-        seen.update(n=len(ads), people=len(people), rounds=rounds)
+    def fake_evaluate(ads, people, lessons, rounds, active=None, history=None, workdir=None):
+        seen.update(n=len(ads), people=len(people), rounds=rounds, active=active, history=history)
         first = next(iter(ads))
-        return {a: {"reactions": [{"persona": "p", "reaction": "share" if a == first else "ignore"}] * 3,
-                    "counts": {}} for a in ads}
+        return {"ads": {a: {"reactions": [{"persona": "p", "reaction": "share" if a == first else "ignore"}] * 3,
+                            "counts": {}} for a in ads},
+                "episodes": [{"people": [people[0]["name"]],
+                              "text": f"[t] [twitter round 1] {people[0]['name']}: liked Brand's post: «cake»"}]}
 
     monkeypatch.setattr(audience, "enabled", lambda: True)
     monkeypatch.setattr(audience, "evaluate", fake_evaluate)
     evolve.run_generation(con)
+    d, people = evolve.dials(con), db.get(con, "personas")
     ads = [db.row(r) for r in con.execute("SELECT * FROM ads ORDER BY sim_score DESC")]
-    assert seen == {"n": len(ads), "people": evolve.dials(con)["audience_size"], "rounds": evolve.dials(con)["oasis_rounds"]}
+    assert (seen["n"], seen["people"], seen["rounds"]) == (len(ads), d["population"], d["oasis_rounds"])
+    assert seen["active"] == (max(1, len(people) // 15), max(5, len(people) // 5))   # MiroFish's sizing rule
     assert ads[0]["sim_score"] == 1.0 and ads[0]["shortlisted"]           # (1 + 0.5) / 1.5
     assert all(a["sim_score"] <= 1 / 3 + 1e-9 for a in ads[1:])             # ignored = neutral (less if bored)
+    # people remember their own feed history next term; real-result recall never includes it
+    assert memory.recall_person(con, people[0]["name"]) == [f"[t] [twitter round 1] {people[0]['name']}: liked Brand's post: «cake»"]
+    assert not any("twitter round" in m for m in memory.recall(con, "cake"))
+    evolve.run_generation(con)
+    assert seen["history"][people[0]["name"]]
 
 
 def test_makers_never_see_audience_personas_or_scoring(con, monkeypatch):
@@ -239,3 +249,30 @@ def test_feed_reader_maps_oasis_actions_to_reactions(tmp_path):
     assert a == {"Asha": "share", "Ravi": "engage"}             # repost; like seen via the repost
     assert b["Asha"]["reaction"] == "dislike" and b["Asha"]["parts"]["copy"]["why"] == "too pricey"
     assert b["Meera"]["reaction"] == "share" and out["adB"]["counts"]["quote"] == 1
+
+
+def test_activity_text_and_episode_packing_follow_mirofish():
+    import sys
+    sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent / "audience"))
+    from activity import AgentActivity, episodes
+    a = AgentActivity("twitter", 3, "Ravi", "QUOTE_POST", {"original_content": "Cake\nat 2am",
+                      "original_author_name": "brand0", "quote_content": "need this"}, 2, "t")
+    assert a.to_episode_text() == "[t] [twitter round 2] Ravi: quoted brand0's post: «Cake / at 2am», adding: «need this»"
+    many = [AgentActivity("twitter", i, f"p{i}", "LIKE_POST", {"post_content": "x" * 900}, 1, "t") for i in range(30)]
+    eps = episodes(many)
+    assert len(eps) > 1 and all(len(e["text"]) <= 9_500 for e in eps)
+    assert sum(len(e["people"]) for e in eps) == 30
+
+
+def test_batched_judge_sees_only_what_a_scroller_sees(con, monkeypatch):
+    calls = []
+
+    def spy(system, user, temperature=0.8):
+        if "crowd" in system:
+            calls.append(user)
+        return fake_llm(system, user, temperature)
+
+    monkeypatch.setattr(llm, "chat_json", spy)
+    evolve.run_generation(con)
+    assert calls and all("post_time" not in u and '"facets"' not in u and "E4" not in u for u in calls)
+    assert all(u.count('"tendencies"') == evolve.dials(con)["audience_size"] for u in calls)

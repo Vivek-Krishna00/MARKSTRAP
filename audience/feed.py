@@ -1,7 +1,8 @@
 """One shared feed for a term's ads, run by MiroFish's own OASIS runner. The only new code in audience/.
 
-stdin : {"people": [{name, age, bio, persona, activity_level}], "ads": [{id, text}], "rounds": int}
-stdout: {"<ad id>": {"reactions": [{persona, reaction: share|engage|ignore|dislike, actions}], "counts": {...}}}
+stdin : {"people": [{name, age, bio, persona, activity_level}], "ads": [{id, text}], "rounds": int, "active": [min, max]}
+stdout: {"ads": {"<ad id>": {"reactions": [{persona, reaction: share|engage|ignore|dislike, actions}], "counts": {}}},
+         "episodes": [{"people": [names], "text": "..."}]}   <- what people did, for the engine's graph memory
 
 Each ad is posted by its own brand account (MiroFish's runner keys opening posts by account, one post each).
 Brand accounts never act afterwards; people act for `rounds` rounds and see whatever the recommender shows them.
@@ -14,6 +15,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from activity import SKIP, AgentActivity, episodes
 from profiles import OasisAgentProfile, save_twitter_csv
 
 HERE = Path(__file__).resolve().parent
@@ -27,9 +29,10 @@ def build(job: dict, workdir: Path) -> Path:
             for i, p in enumerate(people)]
     save_twitter_csv(brands + folk, str(workdir / "twitter_profiles.csv"))
     rounds = int(job["rounds"])
-    config = {  # MiroFish simulation_config.json shape; every person may act every round, no time-of-day effects
+    lo, hi = job.get("active") or (len(people), len(people))
+    config = {  # MiroFish simulation_config.json shape; lo..hi people act per round, no time-of-day effects
         "time_config": {"total_simulation_hours": rounds, "minutes_per_round": 60,
-                        "agents_per_hour_min": len(people), "agents_per_hour_max": len(people),
+                        "agents_per_hour_min": lo, "agents_per_hour_max": hi,
                         "peak_hours": [], "off_peak_hours": []},
         "agent_configs": [{"agent_id": b.user_id, "entity_name": b.user_name, "activity_level": 0.0,
                            "active_hours": list(range(24))} for b in brands]
@@ -88,6 +91,17 @@ def read(db: Path, ads: list, names: list) -> dict:
     return out
 
 
+def activities(log: Path, n_brands: int) -> list:
+    """The runner's actions.jsonl (MiroFish action_logger), people only, without no-op actions."""
+    out = []
+    for line in log.read_text().splitlines() if log.exists() else []:
+        a = json.loads(line)
+        if a.get("action_type") and a["agent_id"] >= n_brands and a["action_type"] not in SKIP:
+            out.append(AgentActivity("twitter", a["agent_id"], a["agent_name"], a["action_type"],
+                                     a.get("action_args") or {}, a["round"], a["timestamp"]))
+    return out
+
+
 def main():
     job = json.load(sys.stdin)
     workdir = Path(job.get("workdir") or tempfile.mkdtemp(prefix="feed-"))
@@ -97,7 +111,8 @@ def main():
         subprocess.run([sys.executable, str(HERE / "run_parallel_simulation.py"), "--config", str(config),
                         "--twitter-only", "--max-rounds", str(job["rounds"]), "--no-wait"],
                        stdout=log, stderr=subprocess.STDOUT, check=True, env=os.environ)
-    print(json.dumps(read(workdir / "twitter_simulation.db", job["ads"], [p["name"] for p in job["people"]])))
+    print(json.dumps({"ads": read(workdir / "twitter_simulation.db", job["ads"], [p["name"] for p in job["people"]]),
+                      "episodes": episodes(activities(workdir / "twitter" / "actions.jsonl", len(job["ads"])))}))
 
 
 if __name__ == "__main__":

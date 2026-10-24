@@ -9,6 +9,9 @@ Copied with removals:
                                   kept OasisAgentProfile, string coercion helpers, the Twitter CSV writer;
                                   removed the Zep-backed OasisProfileGenerator, the MBTI field and archetype rules,
                                   and the Reddit writer (OASIS's Reddit prompt hard-codes MBTI).
+Ported (translated to English, Zep client/threads removed):
+  activity.py                  <- backend/app/services/zep_graph_memory_updater.py
+                                  AgentActivity.to_episode_text and _build_episode_payloads (9,500-char episodes).
 New (MarkStrap):
   feed.py                      one shared feed per term: writes profiles + config, runs the copied runner,
                                reads the OASIS sqlite back as per-person reactions.

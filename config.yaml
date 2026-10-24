@@ -5,7 +5,9 @@ dials:
   explorer_share: 0.3
   explorer_stress_boost: 0.2      # added to explorer_share for a caste whose median fell
   terms_without_offspring: 3
-  audience_size: 12               # archetypes simulated per ad (one batched LLM call)
+  population: 100                 # simulated people per campaign (personality is free; naming costs population/naming_batch calls)
+  naming_batch: 25                # people named per LLM call at seeding
+  audience_size: 12               # people sampled per ad by the batched judge (one LLM call per ad)
   boredom_rate: 0.15              # score multiplier loss per recent sighting of the same style
   boredom_recovery_terms: 2       # sightings older than this are forgotten
   send_bar: 0.3                   # min sim score to shortlist for the real world
@@ -14,7 +16,9 @@ dials:
   queen_poor_terms: 2             # consecutive below-median terms before a queen is culled
   early_velocity_weight: 0.3
   outlier_clip: 3.0               # clip normalised real scores to +/- this
-  oasis_rounds: 3                 # feed rounds per term when AUDIENCE_BACKEND=oasis
+  oasis_rounds: 6                 # feed rounds per term when AUDIENCE_BACKEND=oasis
+  oasis_active_min_div: 15        # MiroFish rule: population/15 .. population/5 people act per round
+  oasis_active_max_div: 5
 
 breeds:
   copywriter:

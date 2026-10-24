@@ -50,14 +50,24 @@ The simulation filters, reality judges. Everything else serves that loop.
 
 ## Audience feed (MiroFish without Zep)
 With `AUDIENCE_BACKEND=oasis`, phase 2 makes all of a term's ads first, then judges them together in **one shared
-OASIS Twitter feed**: each ad is posted by its own brand account, the 12 people act for `oasis_rounds` rounds and
-see whatever the TwHIN-BERT recommender shows them. Their actions are read back from the OASIS sqlite as one
-reaction per person who was shown the ad (repost/quote → share, like/comment/follow → engage, dislike/mute →
-dislike, seen only → ignore), so `sim_score`, boredom, shortlist and demotion are unchanged.
-The runner and profile writer are MiroFish's own code (`audience/NOTICE`); Zep is not used, and MiroFish's
-LLM-written MBTI personas are replaced by `engine/personality.py`. Personas and memories are built in
-`engine/audience.py` and only reach the audience process, never makers. Without the flag, the batched judge is used.
-Measured: first run downloads TwHIN-BERT (~0.5 GB, once); then ~30 s startup + ~10 s per round for 4 people.
+OASIS Twitter feed**: each ad is posted by its own brand account; the campaign's `population` (100) people browse
+for `oasis_rounds` (6) rounds, of whom population/15 .. population/5 act per round (MiroFish's sizing rule), and see
+what the TwHIN-BERT recommender shows them. Actions come back from the OASIS sqlite as one reaction per person who
+was shown the ad (repost/quote → share, like/comment/follow → engage, dislike/mute → dislike, seen → ignore), so
+`sim_score`, boredom, shortlist and demotion are unchanged. Without the flag, the batched judge samples
+`audience_size` (12) of the population per ad.
+
+**Text only, never rendered.** Makers write `seen`: what a scroller perceives, in order (video second by second with
+on-screen text and audio, image framing and overlay text, carousel slides). Both judges see only caption + `seen`
+(`audience.ad_text`), never the maker's notes or the personas' raw facets. Images are rendered once, after approval.
+
+**Memory (MiroFish's Zep role, on Graphiti).** After each feed, every person's actions become English sentences
+(`audience/activity.py`, ported from MiroFish's memory updater) packed into ≤9,500-char episodes and stored by
+`memory.remember_feed` in group `audience-sim`; next term each person's persona includes `memory.recall_person`.
+Real wins/flops live in group `audience` and are the only thing `memory.recall` returns: simulated history never
+teaches the audience what works. SQLite is always written; Graphiti (FalkorDB or Neo4j, local or hosted) is an
+index over it and falls back to SQLite if unreachable.
+Measured: ~30 s startup; 15 people, 2–5 active, 2 rounds ≈ 50 s per term with Gemini.
 
 ## Cut for the hackathon (from the design notes' MVP brief)
 - OASIS feed for the interact phase (makers copying each other) → still one mentor LLM call per term. OASIS is used for the audience only.

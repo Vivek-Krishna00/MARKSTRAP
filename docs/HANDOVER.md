@@ -13,13 +13,13 @@ Hackathon project (6-hour build, open-source tools/models must be used **inside*
   "my office" = MiroFish), OASIS, Graphiti + FalkorDB.
 - Team: user (Vivek), teammate Kanishk (design doc + `github.com/KanishkRanjan/developmental-agent-simulator`).
 
-## What is built (all working, `make test` = 27 passing)
+## What is built (all working, `make test` = 29 passing)
 | Area | Files | Notes |
 |---|---|---|
 | Evolution loop | `engine/evolve.py` | seed, interact (lessons), produce & judge (parallel), queens reproduce, age-out to archive, demotion ratchet, boredom, import real results (per-platform ratios, z vs campaign baseline), revive, lineage |
 | Audience personality | `engine/personality.py`, `engine/personas.py`, `engine/data/profile_population_v1_model.json` | 30-facet copula (n=271,547) from Kanishk's repo; z = √h2·G + E(age) + M(age) + deltas, lazy closed form, sha256-seeded, no archetypes/MBTI. Age sampled first; LLM only names people + habits. Spec `docs/research/personality_spec.md`, ledger + `docs/PARAMETERS.md`. Twin test recovers h2 0.385 vs 0.40 |
-| Audience feed | `audience/` (Python 3.11 venv, `make audience-setup`), `engine/audience.py` | `AUDIENCE_BACKEND=oasis`: MiroFish's own OASIS runner (AGPL, copied, `audience/NOTICE`), no Zep; all ads of a term in one Twitter feed, OASIS actions → share/engage/ignore/dislike. Live-tested with Gemini: works; free tier (15 req/min) runs out during breeding — use Vertex |
-| Memory | `engine/memory.py` | SQLite default; Graphiti+FalkorDB when `MEMORY_BACKEND=graphiti` (needs embeddings endpoint) |
+| Audience feed | `audience/` (Python 3.11 venv, `make audience-setup`), `engine/audience.py` | `AUDIENCE_BACKEND=oasis`: MiroFish's own OASIS runner (AGPL, copied, `audience/NOTICE`), no Zep; all ads of a term in one Twitter feed; population 100, population/15..population/5 act per round, 6 rounds (MiroFish sizing); ads judged from text only (`seen` viewer-eye script); OASIS actions → share/engage/ignore/dislike. Live-tested with Gemini: works; free tier (15 req/min) runs out during breeding — use Vertex |
+| Memory | `engine/memory.py` | Real results (group `audience`) + simulated feed history per person (group `audience-sim`, MiroFish's Zep role). SQLite always; Graphiti on FalkorDB or Neo4j (`GRAPH_DB`, local or hosted) when `MEMORY_BACKEND=graphiti`, auto-fallback to SQLite. **Pending: user's GCP graph DB endpoint + embeddings model** |
 | LLM client | `engine/llm.py` | `chat_json`; `LLM_PROVIDER=vertex` uses Google service-account token (auto-refresh) else base URL + key; 60s timeout, 3 retries; strips `<think>` |
 | Agency layer | `engine/brief.py` | materials (text/URL/PDF; images listed by name), brief extraction, next-experiment proposal |
 | Images | `engine/render.py` | renders **approved** concepts only; providers `vertex` / `gemini` / `openai` (e.g. local FLUX) |

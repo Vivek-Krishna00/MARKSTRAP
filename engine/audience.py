@@ -23,16 +23,25 @@ def enabled() -> bool:
 
 
 def ad_text(ad: dict) -> str:
-    return f"{ad.get('headline', '')}\n{ad.get('body', '')}\n[image: {ad.get('visual', '')}]".strip()
+    """What a scroller perceives, as text: caption + the maker's viewer-eye description. Media is never rendered
+    for the simulation; only approved concepts are rendered, once (engine/render.py)."""
+    fmt = ad.get("format") or "image"
+    seen = ad.get("seen") or ad.get("visual", "")
+    return f"{ad.get('headline', '')}\n{ad.get('body', '')}\n[{fmt}: {seen}]".strip()
 
 
-def people(audience: list, lessons: list) -> list:
+def people(audience: list, lessons: list, history: dict | None = None) -> list:
     lo, hi = CFG["oasis"]["activity_from_E4"]  # [U] Activity facet percentile -> how often they act
-    memory = (" From real campaigns you have seen, you remember: " + " ".join(lessons)) if lessons else ""
-    return [{"name": p["name"], "age": p.get("age"), "bio": f"{p['name']}, {p.get('age', '')}. {p.get('habits', '')}",
-             "persona": " ".join(p["tendencies"]) + " " + personas.EXPRESSION + memory,
-             "activity_level": round(lo + (hi - lo) * p.get("facets", {}).get("E4", 50) / 100, 3)}
-            for p in audience]
+    real = (" From real campaigns you have seen, you remember: " + " ".join(lessons)) if lessons else ""
+    out = []
+    for p in audience:
+        past = (history or {}).get(p["name"])
+        mine = (" Earlier on this feed you: " + " ".join(past)) if past else ""
+        out.append({"name": p["name"], "age": p.get("age"),
+                    "bio": f"{p['name']}, {p.get('age', '')}. {p.get('habits', '')}",
+                    "persona": " ".join(p["tendencies"]) + " " + personas.EXPRESSION + real + mine,
+                    "activity_level": round(lo + (hi - lo) * p.get("facets", {}).get("E4", 50) / 100, 3)})
+    return out
 
 
 def _llm_env() -> dict:
@@ -44,9 +53,10 @@ def _llm_env() -> dict:
     return {**os.environ, "LLM_API_KEY": key, "LLM_BASE_URL": base, "LLM_MODEL_NAME": os.getenv("LLM_MODEL", "")}
 
 
-def evaluate(ads: dict, audience: list, lessons: list, rounds: int, workdir: Path | None = None) -> dict:
-    """ads: {ad_id: ad content}. Returns {ad_id: {"reactions": [...], "counts": {...}}} from one shared feed."""
-    job = {"people": people(audience, lessons), "rounds": rounds,
+def evaluate(ads: dict, audience: list, lessons: list, rounds: int, active: tuple | None = None,
+             history: dict | None = None, workdir: Path | None = None) -> dict:
+    """ads: {ad_id: ad content}. One shared feed; returns {"ads": {ad_id: {"reactions", "counts"}}, "episodes": [...]}."""
+    job = {"people": people(audience, lessons, history), "rounds": rounds, "active": active,
            "ads": [{"id": i, "text": ad_text(a)} for i, a in ads.items()],
            "workdir": str(workdir) if workdir else None}
     out = subprocess.run([str(PY), str(ROOT / "audience" / "feed.py")], input=json.dumps(job), text=True,

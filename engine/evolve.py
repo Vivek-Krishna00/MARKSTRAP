@@ -57,16 +57,25 @@ def seed_campaign(con, goal: str, market: str, ad_type: str, brief: dict | None 
     put(con, "dials", dict(CFG["dials"]))
     d = dials(con)
     seed = random.randrange(2**31)
-    sampled = personas.sample_people(d["audience_size"], seed)
+    sampled = personas.sample_people(d["population"], seed)
     profiles = [personas.describe(f) for _, f in sampled]
-    people = llm.chat_json(
-        "You give names and media habits to audience archetypes for a marketing simulation. "
-        "Their age and personality are fixed; do not change or restate them.",
-        f"Target market: {market}\nCampaign: {goal}\n"
-        + "\n".join(f"{i}. Age {a}. {' '.join(t)}" for i, ((a, _), t) in enumerate(zip(sampled, profiles)))
-        + '\nFor each numbered person return {"personas": [{"name": str, "habits": str (platforms, '
-          'when and why they scroll)}]} in the same order.', temperature=0.9)["personas"]
-    put(con, "personas", [{**people[i % len(people)], "age": a, "facets": f, "tendencies": t}
+    people = []
+    for start in range(0, len(sampled), d["naming_batch"]):  # names + habits only, in batches
+        chunk = list(enumerate(zip(sampled, profiles)))[start:start + d["naming_batch"]]
+        got = llm.chat_json(
+            "You give names and media habits to audience archetypes for a marketing simulation. "
+            "Their age and personality are fixed; do not change or restate them. Every name is different.",
+            f"Target market: {market}\nCampaign: {goal}\nNames already used: {[p['name'] for p in people]}\n"
+            + "\n".join(f"{i}. Age {a}. {' '.join(t)}" for i, ((a, _), t) in chunk)
+            + '\nFor each numbered person return {"personas": [{"name": str, "habits": str (platforms, '
+              'when and why they scroll)}]} in the same order.', temperature=0.9)["personas"]
+        people += [dict(got[j % len(got)]) for j in range(len(chunk))]
+    used = set()
+    for i, p in enumerate(people):  # names are memory keys: keep them unique
+        if p.get("name") in used or not p.get("name"):
+            p["name"] = f"{p.get('name') or 'Person'} {i}"
+        used.add(p["name"])
+    put(con, "personas", [{**people[i], "age": a, "facets": f, "tendencies": t}
                           for i, ((a, f), t) in enumerate(zip(sampled, profiles))])
     put(con, "persona_seed", seed)
     for breed, b in CFG["breeds"].items():
@@ -144,17 +153,24 @@ def make_ad(campaign, team):
         f"Hard constraints (language, brand rules, required info, claims you must NEVER make): "
         f"{json.dumps(campaign.get('constraints', {}))}\n"
         f"Team:\n{brief}\n"
-        'Return {"headline": str, "body": str, "visual": str (image or video concept description), '
-        '"font": str, "platform": "instagram|youtube|tiktok|x|linkedin", "post_time": str, "format": str}')
+        'Return {"headline": str, "body": str (the caption), "format": "image|video|carousel", '
+        '"seen": str (exactly what a person scrolling past perceives, in order, as plain text. Video: second by '
+        'second, the 0-2s hook first, what is on screen, on-screen text, voiceover/audio. Image: what is in frame '
+        'and any overlay text. Carousel: what each slide shows. No production notes), '
+        '"visual": str (art direction for rendering the image later), '
+        '"font": str, "platform": "instagram|youtube|tiktok|x|linkedin", "post_time": str}')
 
 
-def judge(audience, ad, lessons):
+def judge(people, ad, lessons):
+    """Batched judge: the people see only what a scroller sees (audience.ad_text), never the maker's notes."""
+    crowd = [{k: p.get(k) for k in ("name", "age", "habits", "tendencies")} for p in people]
     return llm.chat_json(
         "You simulate a crowd of real people scrolling their feed. Stay in character; most ads get ignored. "
         + personas.EXPRESSION,
-        f"Audience:\n{json.dumps(audience)}\n\nWhat this audience remembers from real campaigns "
+        f"Audience:\n{json.dumps(crowd)}\n\nWhat this audience remembers from real campaigns "
         f"(react colder to ideas like past flops, warmer to ideas like past wins):\n"
-        f"{chr(10).join(lessons) or 'nothing yet'}\n\nAd:\n{json.dumps(ad)}\n"
+        f"{chr(10).join(lessons) or 'nothing yet'}\n\nWhat they see on {ad.get('platform', 'their feed')}:\n"
+        f"{audience.ad_text(ad)}\n"
         'For every persona return {"reactions": [{"persona": str, "reaction": "share|engage|ignore|dislike", '
         '"parts": {"copy": {"score": -1..1, "why": str}, "visual": {...}, "font": {...}, "posting": {...}}}]}',
         temperature=0.7)["reactions"]
@@ -178,14 +194,17 @@ def produce_and_judge(con, term, d):
         q = f"{ad.get('headline', '')} {ad.get('visual', '')}"
         with _db_lock:
             lessons = memory.recall(con, q)
-        return _id("ad"), team, ad, judge(people, ad, lessons)
+        return _id("ad"), team, ad, judge(random.sample(people, min(d["audience_size"], len(people))), ad, lessons)
 
     with ThreadPoolExecutor(8) as ex:
         results = list(ex.map(work, teams))
-    if feed:
-        out = audience.evaluate({aid: ad for aid, _, ad, _ in results}, people,
-                                memory.recall(con, campaign["goal"]), d["oasis_rounds"])
-        results = [(aid, team, ad, out[aid]["reactions"]) for aid, team, ad, _ in results]
+    if feed:  # MiroFish sizing: population/15 .. population/5 people act per round
+        active = (max(1, len(people) // d["oasis_active_min_div"]), max(5, len(people) // d["oasis_active_max_div"]))
+        history = {p["name"]: memory.recall_person(con, p["name"]) for p in people}
+        out = audience.evaluate({aid: ad for aid, _, ad, _ in results}, people, memory.recall(con, campaign["goal"]),
+                                d["oasis_rounds"], active, history)
+        memory.remember_feed(con, term, out["episodes"])
+        results = [(aid, team, ad, out["ads"][aid]["reactions"]) for aid, team, ad, _ in results]
 
     for aid, team, ad, reactions in results:
         style = "/".join(f"{a['caste']}" for a in team if a["breed"] in ("copywriter", "visual_maker"))
