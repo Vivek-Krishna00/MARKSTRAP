@@ -181,6 +181,27 @@
   .render img { display:block; width:100%; max-width:420px; border-radius:10px; border:1px solid var(--rule2); box-shadow:var(--shadow); }
   .render-empty { display:grid; place-items:center; max-width:420px; aspect-ratio:4/5; border:1.5px dashed var(--rule2); border-radius:10px; color:var(--dim); font-size:13px;
     background:repeating-linear-gradient(135deg, transparent 0 8px, var(--ice-dim) 8px 9px); }
+  /* reel director */
+  select { width:100%; background:var(--bg2); border:1px solid var(--rule2); color:var(--text); border-radius:8px; padding:10px 12px; font:400 15px var(--sans); }
+  select:focus { outline:none; border-color:var(--ice); box-shadow:0 0 0 3px var(--ice-dim); }
+  .scene { display:grid; grid-template-columns:132px minmax(0,1fr); gap:22px; padding:20px; border:1px solid var(--rule); border-radius:14px; margin-bottom:14px; background:var(--card); box-shadow:var(--shadow); }
+  .scene.failed { border-color:color-mix(in srgb, var(--bad) 55%, transparent); }
+  .scene label { margin-top:12px; }
+  @media (max-width:640px) { .scene { grid-template-columns:1fr; } .scene .thumb { max-width:160px; } }
+  .thumb { aspect-ratio:9/16; border-radius:10px; overflow:hidden; border:1px solid var(--rule2); display:grid; place-items:center; font:500 11px var(--mono); color:var(--dim); text-transform:uppercase; letter-spacing:.08em;
+    background:repeating-linear-gradient(135deg, transparent 0 8px, var(--ice-dim) 8px 9px), linear-gradient(160deg, var(--ice-dim), var(--card)); }
+  .thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .refs { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; } .refs label { all:unset; cursor:pointer; display:inline-flex; gap:6px; align-items:center; font:500 12px var(--mono); color:var(--dim); border:1px solid var(--rule2); border-radius:999px; padding:4px 10px; }
+  .refs label:has(input:checked) { color:var(--ice); border-color:var(--ice); background:var(--ice-dim); } .refs input { accent-color:var(--ice); margin:0; }
+  details summary { cursor:pointer; font:600 13px var(--sans); color:var(--dim); margin-top:14px; } details pre.visual { white-space:pre-wrap; margin:10px 0 0; }
+  .tags .run { color:var(--ice); border-color:var(--ice); } .tags .fail { color:var(--bad); border-color:currentColor; }
+  .scores { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:4px 26px; }
+  .score { display:grid; grid-template-columns:1fr auto; gap:2px 10px; font-size:13px; padding:6px 0; } .score b { font:500 13px var(--mono); }
+  .score i { grid-column:1/-1; height:4px; border-radius:2px; background:var(--rule2); overflow:hidden; } .score i::after { content:""; display:block; height:100%; width:var(--w); background:var(--ice); }
+  .score.low i::after { background:var(--bad); }
+  .player { display:grid; grid-template-columns:300px 1fr; gap:28px; align-items:start; } @media (max-width:760px) { .player { grid-template-columns:1fr; } }
+  .player video { width:100%; aspect-ratio:9/16; border-radius:14px; background:#000; border:1px solid var(--rule2); box-shadow:var(--shadow); }
+  .asset-thumb { width:36px; height:36px; border-radius:8px; object-fit:cover; }
   footer.site { display:flex; flex-wrap:wrap; gap:20px; max-width:1180px; margin:0 auto; padding:26px 24px 40px; border-top:1px solid var(--rule); font-size:13px; color:var(--dim); }
   footer.site a { color:var(--dim); text-decoration:none; } footer.site a:hover { color:var(--text); }
 </style>
@@ -227,6 +248,7 @@ const STACK = ` .---------.
  '---------' | |
    '---------' |
      '---------'`;
+let reelId = null, R = null;
 let S, step = 0, form = {objective:"", constraints:{}}, still = false;
 try { form = JSON.parse(localStorage.getItem("ms-form")) || form; still = localStorage.getItem("ms-still") === "1"; } catch {}
 const saveForm = () => { try { localStorage.setItem("ms-form", JSON.stringify(form)); } catch {} };
@@ -234,6 +256,9 @@ const reduced = () => still || matchMedia("(prefers-reduced-motion: reduce)").ma
 
 async function load(goto) {
   S = await api("/api/state");
+  const m = goto === undefined && location.hash.match(/^#reel\/([\w-]+)/);
+  if (m) return openReel(m[1]);
+  reelId = R = null;
   if (goto !== undefined) { step = goto; history.replaceState(null, "", `#${goto}`); }
   else if (location.hash) step = +location.hash.slice(1) || 0;
   else if (step === 0 && S.campaign) step = auto();
@@ -248,7 +273,7 @@ function auto() {  // land returning users on the furthest meaningful step
 const approvedAds = () => S.ads.filter(a => S.approvals[a.id] === "approved");
 const kicker = t => `<div class="eyebrow">◆ ${t}</div>`;
 
-function render() {
+function render(keepScroll) {
   const done = [S.org.length > 0, !!S.draft, !!S.campaign, S.term > 0, approvedAds().length > 0, S.ads.some(a => a.real_score != null), S.insights.length > 0];
   $("#steps").innerHTML = STEPS.map((s, i) => `<button class="${i === step ? "on" : ""} ${done[i] && i !== step ? "done" : ""}" onclick="go(${i})" ${i === step ? 'aria-current="step"' : ""}><i>${done[i] && i !== step ? "✓" : i + 1}</i>${s}</button>`).join("");
   $("#steps").style.setProperty("--p", step / (STEPS.length - 1));
@@ -256,11 +281,12 @@ function render() {
   stopOrb();
   $("#side").innerHTML = sidePanel();
   const v = $("#view"); v.classList.remove("fade"); void v.offsetWidth; v.classList.add("fade");
-  v.innerHTML = [materials, goal, briefView, exploreView, approveView, launchView, resultsView][step]();
+  v.innerHTML = reelId && R ? reelView() : [materials, goal, briefView, exploreView, approveView, launchView, resultsView][step]();
   bind();
-  window.scrollTo({top:0});
+  if (reelId && R) bindReel();
+  if (!keepScroll) window.scrollTo({top:0});
 }
-function go(i) { step = i; history.replaceState(null, "", `#${i}`); render(); }
+function go(i) { reelId = R = null; step = i; history.replaceState(null, "", `#${i}`); render(); }
 
 function sidePanel() {
   const st = S.busy ? `<span class="status live">Exploring · round ${(S.progress?.done || 0) + 1}</span>`
@@ -268,7 +294,8 @@ function sidePanel() {
   const items = [...S.insights.slice(0, 1).flatMap(i => i.what_worked || []),
     ...S.memory.slice(0, 4).map(m => `${m.kind === "win" ? "▲" : "▼"} ${m.text.split(" / ")[0]}`)];
   return `<div class="card orbcard"><pre class="orb" id="orb" aria-hidden="true"></pre><div>${st}<h4 style="margin-top:6px">${esc(S.campaign?.brief?.offering || S.campaign?.goal || "Your campaign engine")}</h4><p>${S.personas.length ? `${S.personas.length} simulated people in the audience` : "Starts when you confirm a brief"}</p></div></div>
-  <div class="card"><h4>What happens here</h4><p>${GUIDE[step]}</p></div>
+  <div class="card"><h4>What happens here</h4><p>${reelId ? REEL_GUIDE : GUIDE[step]}</p></div>
+  ${reelId && R ? `<div class="card"><h4>Production stack</h4>${Object.entries(R.providers).map(([k, v]) => `<p class="note" style="display:flex;justify-content:space-between;padding:3px 0"><span>${k}</span><span class="mono" style="color:${v ? "var(--text)" : "var(--faint)"}">${esc(v || "fallback")}</span></p>`).join("")}<p class="note" style="margin-top:8px">Every tool is open source. Missing providers fall back to uploads and motion graphics.</p></div>` : ""}
   <div class="card learned"><h4>What we've learned</h4>${items.length ? items.map(l => `<p>${esc(l)}</p>`).join("") : `<p>Real results you bring back appear here and shape every future campaign.</p>`}</div>
   <div class="card"><h4>Materials on file <span class="count">${S.org.length}</span></h4><p>Reused across campaigns. <a href="#0" onclick="go(0);return false">Manage</a></p></div>`;
 }
@@ -343,7 +370,7 @@ function concept(a, i, actions) {
       <div class="tags"><span class="ice">${esc(c.platform)}</span><span>${esc(c.format || "post")}</span><span>${esc(c.post_time)}</span>${a.shortlisted ? '<span class="good">shortlisted</span>' : ""}${a.real_score != null ? `<span class="${a.real_score > 0 ? "good" : "bad"}">real ${a.real_score > 0 ? "above" : "below"} baseline</span>` : ""}</div>
       <h4>${esc(c.headline)}</h4><p>${esc(c.body)}</p>
       <div class="visual">VISUAL — ${esc(c.visual)}<br>TYPE — ${esc(c.font)}</div>
-      ${st === "approved" ? imageSlot(a) : ""}
+      ${st === "approved" ? imageSlot(a) + reelSlot(a) : ""}
       ${actions ? `<div class="actions" style="margin-top:20px">
         <button class="${st === "approved" ? "btn" : "line"} tiny" onclick="setAp('${a.id}','${st === "approved" ? "" : "approved"}')">${st === "approved" ? "Approved" : "Approve"}</button>
         <button class="line tiny" onclick="setAp('${a.id}','${st === "rejected" ? "" : "rejected"}')">${st === "rejected" ? "Undo" : "Reject"}</button></div>` : ""}
@@ -398,6 +425,7 @@ function launchView() {
     <h3 class="label" style="margin-top:22px">Copy</h3><div class="copy">${esc(c.headline)}\n\n${esc(c.body)}</div>
     <button class="line tiny" style="margin-top:14px" onclick="copyAd(${i}, this)">Copy text</button>
     <h3 class="label">Image</h3>${imageSlot(a)}
+    <h3 class="label">Reel</h3>${reelSlot(a)}
     <h3 class="label">Visual brief for your designer</h3><div class="visual">${esc(c.visual)}<br>TYPE — ${esc(c.font)}</div></section>`; }).join("") || `<p class="empty">Approve concepts first.</p>`}
   <div class="actions"><a href="/api/launch.csv"><button class="btn" type="button">Download results sheet</button></a><button class="line" onclick="go(6)">I've posted · add results</button></div>
   <p class="note" style="margin-top:16px">Fill the sheet from each platform's insights after a few hours or days. Early engagement counts extra.</p>`;
@@ -438,6 +466,147 @@ async function renderAd(id, btn) {
 }
 function copyAd(i, btn) { const c = approvedAds()[i].content; navigator.clipboard.writeText(`${c.headline}\n\n${c.body}`); btn.textContent = "Copied"; }
 async function setAp(id, status) { await post(`/api/ads/${id}/approval`, {status}); load(step); }
+
+// Reel Director ─ an approved concept becomes a vertical Reel
+const REEL_GUIDE = "The director plans every scene before anything is generated. Edit freely: only the scenes you change are re-made, and nothing paid is generated twice.";
+const ASSET_TYPES = {motion_graphics:"Motion graphics", uploaded_asset:"Your upload", generated_image:"Generated image", generated_video:"Generated video", stock_video:"Stock (Openverse)"};
+const ROLES = {product:"Product", character:"Character / spokesperson", location:"Location", style:"Style reference", logo:"Logo", music:"Music track", font:"Font", reference_reel:"Reference Reel"};
+const REEL_STAGES = ["storyboard", "assets", "voice", "captions", "critic", "preview", "final"];
+const CRIT_NAMES = {hook:"First 3 seconds", clarity:"Message clarity", visual_relevance:"Visual relevance", brand_consistency:"Brand consistency", product_accuracy:"Product accuracy", continuity:"Scene continuity", pacing:"Pacing", caption_readability:"Caption readability", audio_balance:"Audio balance", cta_clarity:"Call to action", platform_fit:"Platform fit"};
+
+function reelSlot(a) {
+  const r = (S.reels || []).find(x => x.ad_id === a.id);
+  return `<div class="row" style="margin-top:10px;align-items:center">${r
+    ? `<button class="line tiny" onclick="openReel('${r.id}')">Open Reel</button><span class="note">${esc(r.status)}</span>`
+    : `<button class="line tiny" onclick="newReel('${a.id}', this)">Create Reel</button><span class="note">9:16 video from this concept</span>`}</div><div class="err" id="reelerr-${a.id}"></div>`;
+}
+async function newReel(adId, btn) {
+  btn.disabled = true; btn.textContent = "Preparing the brief…";
+  try { const r = await post(`/api/ads/${adId}/reel`); openReel(r.id); }
+  catch (e) { $(`#reelerr-${adId}`).textContent = e.message; btn.disabled = false; btn.textContent = "Create Reel"; }
+}
+async function openReel(id) {
+  reelId = id; step = Math.max(step, 4); history.replaceState(null, "", `#reel/${id}`);
+  if (!S) S = await api("/api/state");
+  await loadReel();
+}
+let reelTimer = null;
+async function loadReel(quiet) {
+  clearTimeout(reelTimer);
+  let r;
+  try { r = await api(`/api/reels/${reelId}`); } catch (e) { reelId = R = null; history.replaceState(null, "", "#4"); step = 4; render(); return; }
+  const changed = JSON.stringify(r) !== JSON.stringify(R);
+  R = r;
+  if (!quiet || changed) render(quiet);
+  if (R.busy) reelTimer = setTimeout(() => reelId === r.id && loadReel(true), 1500);
+}
+const reelPost = async (path, body) => { try { await post(path, body); } catch (e) { reelError(e.message); } loadReel(true); };
+const reelError = msg => { const el = $("#reelErr"); if (el) el.textContent = msg; };
+
+function reelView() {
+  const b = R.brief, spec = R.spec, ad = S.ads.find(a => a.id === R.ad_id);
+  const f = (k, l, ph = "") => `<div><label>${l}</label><input data-rb="${k}" value="${esc(Array.isArray(b[k]) ? b[k].join(" ") : b[k])}" placeholder="${ph}" ${R.busy ? "disabled" : ""}></div>`;
+  const images = R.assets.filter(a => a.kind === "image" || a.kind === "video");
+  return `${kicker("Reel Director")}
+  <h2 class="rv">From concept to <em class="s">Reel.</em></h2>
+  <p class="lead rv">${esc((ad?.content?.headline || spec?.title || "").replace(/[.!?\s]+$/, ""))}. Plan the scenes, review them, then produce. Expensive generation only starts after you approve the storyboard.</p>
+  <div class="row" style="margin:-14px 0 8px"><button class="line tiny" onclick="go(${step})">← Back to concepts</button></div>
+
+  <h3 class="label">Brief</h3>
+  <div class="grid2">
+    ${f("product", "Product or service")}${f("audience", "Audience")}${f("objective", "Objective")}${f("cta", "Call to action", "Order at …")}
+    ${f("brandVoice", "Brand voice")}${f("style", "Visual style")}${f("colors", "Brand colours", "#1A1033 #FFB84D")}
+    <div class="grid2" style="gap:0 14px"><div><label>Platform</label><select data-rb="platform" ${R.busy ? "disabled" : ""}>${[["instagram_reels", "Instagram Reels"], ["tiktok", "TikTok"], ["youtube_shorts", "YouTube Shorts"]].map(([v, l]) => `<option value="${v}" ${b.platform === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      <div><label>Seconds</label><input data-rb="durationSeconds" type="number" min="6" max="90" value="${b.durationSeconds}" ${R.busy ? "disabled" : ""}></div></div>
+  </div>
+  <label>Notes for the director</label><textarea data-rb="notes" rows="2" placeholder="Anything the scenes must show or avoid" ${R.busy ? "disabled" : ""}>${esc(b.notes)}</textarea>
+
+  <h3 class="label">References <span class="count">${R.assets.length}</span></h3>
+  <div class="drop" id="rdrop"><pre aria-hidden="true"> .-------.\n | ◐  ▲ |\n |  ▤   |\n '-------'</pre><div><div class="big">Drop logo, product shots, characters, music</div>
+    <div class="note">Products and characters stay consistent across every scene that uses them</div>
+    <div class="row" style="margin-top:12px" onclick="event.stopPropagation()"><select id="rrole" style="max-width:220px">${Object.entries(ROLES).map(([k, v]) => `<option value="${k}">${v}</option>`).join("")}</select><input id="rnote" placeholder="What must stay the same? e.g. pink moon sticker"></div></div>
+    <input type="file" id="rfile" multiple hidden accept="image/*,video/*,audio/*,.ttf,.otf"></div>
+  ${R.assets.map(a => `<div class="mat">${a.kind === "image" ? `<img class="asset-thumb" src="/reels/${R.id}/${a.id}" alt="">` : `<span class="k">${a.kind === "video" ? "▶" : a.kind === "audio" ? "♪" : "Aa"}</span>`}<span class="n">${esc(a.name)}<small>${esc(ROLES[a.role] || a.role)}${a.meta?.note ? " · " + esc(a.meta.note) : ""}</small></span><span class="chip">${esc(a.id)}</span></div>`).join("")}
+
+  <h3 class="label">Storyboard ${spec ? `<span class="count">${spec.scenes.length} scenes · ${spec.durationSeconds}s</span>` : ""}</h3>
+  ${spec ? `<div class="visual" style="margin-bottom:16px">HOOK — ${esc(spec.hook.onScreenText)} · ${esc(spec.hook.visualAction)}<br>TONE — ${esc(spec.creativeDirection.tone)} · ${esc(spec.creativeDirection.visualStyle)}<br>CTA — ${esc(spec.callToAction.onScreenText)}</div>
+    ${R.scenes.map((s, i) => sceneCard(s, i, images)).join("")}` : `<div class="empty"><pre aria-hidden="true"> [1][2][3]\n [4][5][6]</pre>No storyboard yet. The director plans a hook, the beats and a call to action, timed to the second.</div>`}
+  <div class="actions" style="margin-top:18px"><button class="${spec ? "line" : "btn"}" id="rStory" ${R.busy ? "disabled" : ""}>${spec ? "Re-plan storyboard" : "Generate storyboard"}</button>${spec ? `<span class="note">Re-planning replaces your scene edits.</span>` : ""}</div>
+
+  ${spec ? productionBlock() : ""}
+  <div id="reelErr" class="err"></div>`;
+}
+
+function sceneCard(s, i, images) {
+  const st = s.state || {}, a = st.asset || {}, status = R.busy && st.status === "running" ? "making" : st.status || "pending";
+  const showImg = a.path && a.kind === "image";
+  return `<article class="scene ${st.status === "failed" ? "failed" : ""}" data-sid="${s.id}">
+    <div class="thumb">${showImg ? `<img src="/reels/${R.id}/${s.id}?v=${esc(a.hash || "")}" alt="Scene ${i + 1}">` : `<span>${a.kind === "video" ? "video" : "motion"}</span>`}</div>
+    <div>
+      <div class="tags"><span class="ice">${pad(i + 1)} · ${esc(s.purpose)}</span><span>${s.startSeconds}–${s.endSeconds}s</span>
+        <span class="${status === "done" ? "good" : status === "failed" ? "fail" : status === "making" ? "run pulse" : ""}">${esc(status)}</span>
+        ${a.fallback ? `<span title="${esc(a.fallback)}">fallback</span>` : ""}${a.provider ? `<span>${esc(a.provider)}</span>` : ""}</div>
+      <label>Voiceover</label><textarea data-sf="voiceover" rows="2" ${R.busy ? "disabled" : ""}>${esc(s.voiceover)}</textarea>
+      <div class="grid2"><div><label>On-screen text</label><input data-sf="onScreenText" value="${esc(s.onScreenText)}" ${R.busy ? "disabled" : ""}></div>
+        <div><label>Visual source</label><select data-sf="assetType" ${R.busy ? "disabled" : ""}>${Object.entries(ASSET_TYPES).map(([k, v]) => `<option value="${k}" ${s.assetType === k ? "selected" : ""}>${v}</option>`).join("")}</select></div></div>
+      <label>What we see</label><textarea data-sf="visualDescription" rows="2" ${R.busy ? "disabled" : ""}>${esc(s.visualDescription)}</textarea>
+      ${images.length ? `<label>References in this scene</label><div class="refs">${images.map(x => `<label><input type="checkbox" data-ref="${x.id}" ${s.referenceAssetIds.includes(x.id) ? "checked" : ""} ${R.busy ? "disabled" : ""}>${esc(x.name)}</label>`).join("")}</div>` : ""}
+      <details><summary>Generation prompt</summary><pre class="visual">${esc(s.generationPrompt)}</pre></details>
+      ${st.error ? `<div class="err">${esc(st.error)}. The scene uses a motion-graphics stand-in; regenerate or replace it.</div>` : a.fallback && s.assetType !== "motion_graphics" ? `<div class="note" style="margin-top:8px">Stand-in used: ${esc(a.fallback)}</div>` : ""}
+      ${R.renders?.preview ? `<div class="row" style="margin-top:14px"><button class="line tiny" data-regen ${R.busy ? "disabled" : ""}>Regenerate scene</button><button class="line tiny" data-replace ${R.busy ? "disabled" : ""}>Replace with my media</button><input type="file" data-repfile hidden accept="image/*,video/*"></div>` : ""}
+    </div></article>`;
+}
+
+function productionBlock() {
+  const r = R.renders || {}, c = R.critic, cur = R.stage || (R.status === "done" ? "final" : r.preview ? "preview" : "");
+  const label = !r.preview && !["failed", "interrupted"].includes(R.status) ? "Produce Reel" : ["failed", "interrupted"].includes(R.status) ? "Resume" : "Re-assemble";
+  return `<h3 class="label">Production</h3>
+  <div class="engine card"><div class="cycle">${REEL_STAGES.map(s => `<span class="${s === cur && R.busy ? "on" : ""}">${s}</span>`).join("")}</div>
+    <div class="note ${R.busy ? "pulse" : ""}" style="margin-top:14px">${R.busy ? `Working · ${esc(R.stage || R.status)}. You can leave this page; it keeps going.` : r.preview ? "Preview ready. Edits re-make only the scenes they touch." : "Generates visuals, voice and captions, reviews the cut, repairs weak scenes, then renders a preview."}</div>
+    ${R.error ? `<div class="err">${esc(R.error)}. Finished scenes are kept; fix the cause and press Resume.</div>` : ""}
+    <div class="actions" style="margin-top:16px"><button class="btn" id="rProduce" ${R.busy ? "disabled" : ""}>${label}</button></div></div>
+  ${c ? `<h3 class="label">Critic <span class="count">${c.overall}/10 · ${esc(c.by)}</span></h3>
+    <div class="scores">${Object.entries(c.scores).map(([k, v]) => `<div class="score ${v < 6 ? "low" : ""}"><span>${CRIT_NAMES[k] || k}</span><b>${v.toFixed(0)}</b><i style="--w:${v * 10}%"></i></div>`).join("")}</div>
+    ${(c.history || []).map(h => `<p class="note" style="margin-top:12px">Round ${h.round}: repaired ${h.repaired.map(esc).join(", ")} automatically.</p>`).join("")}
+    ${c.issues.length ? `<ul class="clean" style="margin-top:12px">${c.issues.slice(0, 8).map(i => `<li>${i.sceneId ? `<span class="mono">${esc(i.sceneId)}</span> ` : ""}${esc(i.problem)}${i.fix ? ` <span class="note">→ ${esc(i.fix)}</span>` : ""}</li>`).join("")}</ul>` : `<p class="note">No open issues.</p>`}` : ""}
+  ${r.preview ? `<h3 class="label">Preview</h3><div class="player">
+    <video controls playsinline preload="metadata" src="/reels/${R.id}/${r.final ? "final" : "preview"}.mp4?v=${esc(String(r.preview_at || ""))}${r.final ? "f" : ""}"></video>
+    <div><p style="margin-top:0">${r.final ? "Final 1080 × 1920 export is ready." : "This is a fast low-resolution preview. Export renders the full 1080 × 1920 MP4."}</p>
+      <div class="actions" style="margin-top:12px"><button class="${r.final ? "line" : "btn"}" id="rExport" ${R.busy ? "disabled" : ""}>${r.final ? "Export again" : "Export final MP4"}</button>
+      ${r.final ? `<a href="/reels/${R.id}/final.mp4" download><button class="btn" type="button">Download MP4</button></a>` : ""}</div>
+      <p class="note">Captions sit inside the platform safe zones; music ducks under the voice.</p></div></div>` : ""}`;
+}
+
+function bindReel() {
+  document.querySelectorAll("[data-rb]").forEach(el => el.onchange = () => reelPatch({[el.dataset.rb]: el.value}));
+  const drop = $("#rdrop");
+  if (drop) {
+    drop.onclick = () => $("#rfile").click();
+    drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+    drop.ondragleave = () => drop.classList.remove("over");
+    const send = async files => { for (const f of files) { const fd = new FormData(); fd.append("file", f); fd.append("role", $("#rrole").value); fd.append("note", $("#rnote").value);
+      try { await api(`/api/reels/${reelId}/assets`, {method:"POST", body:fd}); } catch (e) { reelError(e.message); return; } } loadReel(); };
+    drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); send(e.dataTransfer.files); };
+    $("#rfile").onchange = e => send(e.target.files);
+  }
+  document.querySelectorAll(".scene").forEach(card => {
+    const sid = card.dataset.sid;
+    const put = async body => { try { R = await api(`/api/reels/${reelId}/scenes/${sid}`, {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)}); render(true); } catch (e) { reelError(e.message); } };
+    card.querySelectorAll("[data-sf]").forEach(el => el.onchange = () => put({[el.dataset.sf]: el.value}));
+    card.querySelectorAll("[data-ref]").forEach(el => el.onchange = () => put({referenceAssetIds: [...card.querySelectorAll("[data-ref]:checked")].map(x => x.dataset.ref)}));
+    const rg = card.querySelector("[data-regen]"); if (rg) rg.onclick = () => reelPost(`/api/reels/${reelId}/scenes/${sid}/regenerate`);
+    const rp = card.querySelector("[data-replace]"), rf = card.querySelector("[data-repfile]");
+    if (rp) { rp.onclick = () => rf.click(); rf.onchange = async () => { const fd = new FormData(); fd.append("file", rf.files[0]);
+      try { await api(`/api/reels/${reelId}/scenes/${sid}/replace`, {method:"POST", body:fd}); } catch (e) { reelError(e.message); } loadReel(true); }; }
+  });
+  if ($("#rStory")) $("#rStory").onclick = () => reelPost(`/api/reels/${reelId}/storyboard`);
+  if ($("#rProduce")) $("#rProduce").onclick = () => reelPost(`/api/reels/${reelId}/produce`);
+  if ($("#rExport")) $("#rExport").onclick = () => reelPost(`/api/reels/${reelId}/export`);
+}
+async function reelPatch(fields) {
+  try { R = await api(`/api/reels/${reelId}/brief`, {method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify(fields)}); render(true); }
+  catch (e) { reelError(e.message); }
+}
 
 // ASCII orb: a lit sphere with ordered (Bayer) dithering
 let orbTimer = null;

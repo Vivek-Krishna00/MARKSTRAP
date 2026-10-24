@@ -2,7 +2,7 @@ PY := .venv/bin/python
 -include .env
 export
 
-.PHONY: help setup audience-setup dev test up down logs gen falkordb index clean site ai-check
+.PHONY: help setup audience-setup reel-setup reel-demo dev test up down logs gen falkordb index clean site ai-check
 
 help:  ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -19,6 +19,13 @@ audience-setup:  ## Python 3.11 venv for the MiroFish/OASIS audience (AUDIENCE_B
 
 dev:  ## run API + dashboard locally on :8000
 	$(PY) -m uvicorn engine.api:app --reload --port 8000
+
+reel-setup:  ## Reel Director voice: Piper TTS (open source) + one English voice (~60 MB) in data/voices
+	$(PY) -m pip install -q piper-tts
+	mkdir -p data/voices && cd data/voices && ../../$(PY) -m piper.download_voices en_US-lessac-medium
+
+reel-demo:  ## render the demo reel fixture with no paid provider (scratch DB): make reel-demo FINAL=1
+	DB_PATH=data/reel-demo.db REEL_TEXT_PROVIDER=mock $(PY) -m engine.cli reel-demo $(if $(FINAL),--final)
 
 site:  ## build the website (site/ -> web/site, served at /)
 	cd site && npm install --no-audit --no-fund && npm run build

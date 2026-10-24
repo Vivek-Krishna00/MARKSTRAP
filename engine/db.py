@@ -21,6 +21,13 @@ CREATE TABLE IF NOT EXISTS queens (
 CREATE TABLE IF NOT EXISTS demotions (style TEXT PRIMARY KEY, n INT);
 CREATE TABLE IF NOT EXISTS memory (id INTEGER PRIMARY KEY, term INT, kind TEXT, text TEXT);
 CREATE TABLE IF NOT EXISTS dial_log (id INTEGER PRIMARY KEY, term INT, dial TEXT, value TEXT, ts REAL);
+CREATE TABLE IF NOT EXISTS reels (
+  id TEXT PRIMARY KEY, ad_id TEXT, status TEXT, stage TEXT, brief TEXT, spec TEXT, critic TEXT, renders TEXT,
+  error TEXT, log TEXT, updated REAL);
+CREATE TABLE IF NOT EXISTS reel_scenes (
+  reel_id TEXT, scene_id TEXT, status TEXT DEFAULT 'pending', error TEXT, attempts INT DEFAULT 0, regen INT DEFAULT 0,
+  replaced TEXT, asset TEXT, audio TEXT, PRIMARY KEY (reel_id, scene_id));
+CREATE TABLE IF NOT EXISTS reel_assets (id TEXT PRIMARY KEY, reel_id TEXT, role TEXT, kind TEXT, name TEXT, path TEXT, meta TEXT);
 """
 
 

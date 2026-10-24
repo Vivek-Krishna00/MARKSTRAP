@@ -14,7 +14,11 @@ dependencies = [
   "httpx>=0.27",
   "google-auth[requests]>=2.30",
   "graphiti-core[falkordb]>=0.17",
+  "moviepy>=2.1",
+  "pillow>=10",
 ]
+
+# Reel voice: `make reel-setup` (Piper, GPL-3.0). Word timings from audio: pip install faster-whisper (MIT).
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
@@ -23,4 +27,4 @@ dev = ["pytest>=8"]
 packages = ["engine"]
 
 [tool.setuptools.package-data]
-engine = ["data/*.json"]
+engine = ["data/*.json", "data/fonts/*"]

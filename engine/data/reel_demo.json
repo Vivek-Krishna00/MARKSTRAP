@@ -1,0 +1,77 @@
+{
+ "ad": {
+  "id": "demo-ad",
+  "content": {
+   "headline": "Exam night. Cake o'clock.",
+   "body": "Fresh slices delivered to your hostel gate in 20 minutes, till 2am. Student price: ₹99.",
+   "seen": "0-2s: a tired student stares at a textbook at 1am. Text: EXAM NIGHT? 2-5s: phone buzzes, a cake box arrives at the hostel gate. Voice: fresh slices, twenty minutes, till 2am.",
+   "visual": "Warm late-night hostel room, desk lamp glow, chocolate cake slice in a kraft box",
+   "font": "Manrope ExtraBold",
+   "platform": "instagram",
+   "format": "video"
+  }
+ },
+ "campaign": {
+  "goal": "Late-night cake orders from Bangalore students",
+  "market": "Bangalore college students in hostels",
+  "brief": {
+   "offering": "Midnight Crumb, a late-night cake delivery for students",
+   "audience": "Bangalore college students in hostels, 18-24",
+   "goal": "200 late-night orders in the first month",
+   "key_messages": ["Fresh slices, delivered in 20 minutes", "Open till 2am", "Student price: ₹99 a slice"],
+   "proof_points": ["4.8 stars from 1,200 student orders"],
+   "destination": "Order at midnightcrumb.in"
+  },
+  "constraints": {"brand_rules": "Playful, never preachy. Colours #1A1033 #FFB84D #FF5C8A", "restricted_claims": "no health claims", "language": "English"}
+ },
+ "spec": {
+  "title": "Exam night. Cake o'clock.",
+  "objective": "200 late-night orders in the first month",
+  "audience": "Bangalore college students in hostels, 18-24",
+  "platform": "instagram_reels",
+  "aspectRatio": "9:16",
+  "durationSeconds": 20,
+  "creativeDirection": {
+   "tone": "playful, conspiratorial, late-night",
+   "visualStyle": "bold flat colour blocks, chunky type, warm lamp glow",
+   "colorDirection": ["#1A1033", "#FFB84D", "#FF5C8A"],
+   "editingStyle": "punchy cuts on the beat, one idea per scene",
+   "musicDirection": "lo-fi, mid-tempo, warm"
+  },
+  "hook": {"spokenText": "Exam at nine. It's 1am.", "onScreenText": "EXAM AT 9. IT'S 1AM.", "visualAction": "type slams in over a dark room"},
+  "voiceover": {"fullScript": "", "voiceDirection": "friendly, a little conspiratorial, quick"},
+  "scenes": [
+   {"id": "scene-01", "startSeconds": 0, "endSeconds": 2.5, "purpose": "hook",
+    "voiceover": "Exam at nine. It's 1am.", "onScreenText": "EXAM AT 9. IT'S 1AM.",
+    "visualDescription": "Dark hostel room, one desk lamp, textbook open", "assetType": "motion_graphics",
+    "subject": "a tired student at a desk", "action": "head drops onto the open textbook",
+    "environment": "hostel room at night", "lighting": "single warm desk lamp", "emotion": "relatable exhaustion",
+    "transitionOut": "whip", "soundEffect": "whoosh"},
+   {"id": "scene-02", "startSeconds": 2.5, "endSeconds": 6, "purpose": "problem",
+    "voiceover": "Canteen's shut. Your brain wants sugar.", "onScreenText": "Canteen: closed. Brain: hungry.",
+    "visualDescription": "Shuttered canteen, flickering sign", "assetType": "motion_graphics",
+    "subject": "a closed canteen shutter", "action": "sign flickers off", "emotion": "mock tragedy",
+    "transitionOut": "crossfade"},
+   {"id": "scene-03", "startSeconds": 6, "endSeconds": 10, "purpose": "demonstration",
+    "voiceover": "Tap once. Fresh cake at your gate in twenty minutes.", "onScreenText": "Fresh slice. 20 minutes.",
+    "visualDescription": "Phone tap, kraft cake box handed over at a hostel gate", "assetType": "generated_image",
+    "subject": "chocolate cake slice in a kraft box", "action": "box handed over at the hostel gate",
+    "environment": "hostel gate at night, street light", "productPlacement": "box centre frame, logo sticker facing camera",
+    "camera": {"shot": "close-up", "movement": "slow push-in", "lensOrPerspective": "50mm, eye level"},
+    "transitionOut": "slide", "soundEffect": "pop"},
+   {"id": "scene-04", "startSeconds": 10, "endSeconds": 13.5, "purpose": "proof",
+    "voiceover": "Twelve hundred students rate us 4.8 stars.", "onScreenText": "Rated 4.8 by 1,200 students",
+    "visualDescription": "Big star rating counter", "assetType": "motion_graphics", "transitionOut": "crossfade"},
+   {"id": "scene-05", "startSeconds": 13.5, "endSeconds": 16.5, "purpose": "payoff",
+    "voiceover": "Ninety nine rupees. Open till 2am.", "onScreenText": "₹99 a slice · till 2am",
+    "visualDescription": "Price tag stamps onto the screen", "assetType": "motion_graphics", "transitionOut": "crossfade"},
+   {"id": "scene-06", "startSeconds": 16.5, "endSeconds": 20, "purpose": "cta",
+    "voiceover": "Order now at midnightcrumb dot in.", "onScreenText": "Order tonight",
+    "visualDescription": "Logo and order button", "assetType": "motion_graphics", "transitionOut": "cut"}
+  ],
+  "captionStyle": {"position": "bottom", "font": "Manrope ExtraBold", "colors": ["#FFFFFF", "#FFB84D"], "animation": "word-by-word highlight"},
+  "callToAction": {"spokenText": "Order now at midnightcrumb dot in.", "onScreenText": "midnightcrumb.in"},
+  "continuity": {"product": "chocolate cake slice in a kraft box with a pink moon sticker", "environment": "Bangalore hostel at night",
+   "lighting": "warm lamp glow against deep purple night", "style": "bold flat colour, chunky type"}
+ }
+}

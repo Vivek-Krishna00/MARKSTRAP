@@ -10,7 +10,7 @@ Only open-source tools and models may be used **inside the product**: open model
 endpoint, Graphiti + FalkorDB, FastAPI, SQLite. No proprietary APIs in `engine/`.
 
 ## Commands
-- `make site` (rebuild the website after editing `site/`) · `make setup` · `make dev` (http://localhost:8000) · `make test` · `make gen N=3` · `make up` (Docker)
+- `make site` (rebuild the website after editing `site/`) · `make setup` · `make reel-setup` · `make reel-demo` · `make dev` (http://localhost:8000) · `make test` · `make gen N=3` · `make up` (Docker)
 - CLI: `.venv/bin/python -m engine.cli --help`
 
 ## Layout
@@ -22,6 +22,9 @@ endpoint, Graphiti + FalkorDB, FastAPI, SQLite. No proprietary APIs in `engine/`
 - `engine/llm.py` — single `chat_json` call; tests monkeypatch it
 - `site/` (React + Vite, reveals in `site/src/motion.jsx`, no animation library) — the MarkStrap website, built by `make site` into `web/site/`, served at `/`
 - `web/app.html` (at `/app`) — the user flow: materials → goal & limits → brief → explore → approve → launch → results & next
+- `engine/reel.py` + `engine/reel_providers.py` + `engine/compose.py` — Reel Director: approved concept → validated
+  storyboard → assets/voice/captions → critic + per-scene repair → MoviePy MP4 (`#reel/<id>` in `/app`,
+  `make reel-demo`); open source only, so no Remotion. Docs `docs/reel-director.md`
 - `engine/brief.py` — materials ingestion (text/links/PDF), brief extraction, next-experiment proposal
 - `engine/api.py` + `web/console.html` (at `/console`) — engine console; `engine/cli.py` — same ops from the terminal
 - `config.yaml` — breeds, castes, dials, per-platform signal weights

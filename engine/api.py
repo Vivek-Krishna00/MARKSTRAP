@@ -10,10 +10,11 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import brief, db, evolve, render
+from . import brief, db, evolve, reel, render
 
 app = FastAPI(title="MarkStrap Campaign Engine")
 con = db.connect()
+reel.interrupted(con)
 busy = threading.Lock()  # ponytail: one run at a time, single-campaign engine
 
 
@@ -79,6 +80,7 @@ def state():
         "org": [{"name": m["name"], "kind": m["kind"]} for m in brief.load_org()["materials"]],
         "draft": brief.load_org().get("draft"),
         "renders": sorted(p.stem for p in render.OUT.glob("*.png")) if render.OUT.exists() else [],
+        "reels": [dict(r) for r in con.execute("SELECT id, ad_id, status FROM reels ORDER BY updated DESC")],
     }
 
 
@@ -313,3 +315,155 @@ def rendered(ad_id: str):
     if not path.exists():
         raise HTTPException(404, "not rendered yet")
     return FileResponse(path)
+
+
+# ---------- Reel Director: approved concept -> storyboard -> produce -> preview -> export ----------
+
+def _reel(rid):
+    try:
+        return reel.view(con, rid)
+    except KeyError:
+        raise HTTPException(404, "no such reel")
+
+
+def _reel_bg(rid, fn):
+    """Long work runs in a thread; status, stage and errors are stored on the reel and polled by the UI."""
+    _reel(rid)
+    if not reel.claim(rid):
+        raise HTTPException(409, "this reel is already working")
+
+    path = con.execute("PRAGMA database_list").fetchone()[2]
+
+    def work():
+        own = db.connect(path)  # its own connection: the UI polls the shared one while this writes
+        try:
+            fn(own, rid)
+        except Exception:  # already recorded on the reel by the stage that failed
+            pass
+        finally:
+            reel.release(rid)
+            own.close()
+    threading.Thread(target=work, daemon=True).start()
+    return _reel(rid)
+
+
+def _idle(rid):
+    if rid in reel._running:
+        raise HTTPException(409, "wait for the current run to finish")
+
+
+@app.post("/api/ads/{ad_id}/reel")
+def create_reel(ad_id: str):
+    ad = con.execute("SELECT * FROM ads WHERE id=?", (ad_id,)).fetchone()
+    if not ad:
+        raise HTTPException(404, "no such concept")
+    rid = reel.create(con, ad_id, reel.prefill(db.row(ad), db.get(con, "campaign") or {}))
+    return _reel(rid)
+
+
+@app.get("/api/reels/{rid}")
+def get_reel(rid: str):
+    return _reel(rid)
+
+
+@app.patch("/api/reels/{rid}/brief")
+def edit_reel_brief(rid: str, fields: dict):
+    _idle(rid)
+    b = _reel(rid)["brief"]
+    b.update({k: v for k, v in fields.items() if k in b})  # only known brief fields
+    try:
+        b["durationSeconds"] = float(b["durationSeconds"])
+    except (TypeError, ValueError):
+        raise HTTPException(400, "duration must be a number of seconds")
+    if not 6 <= b["durationSeconds"] <= 90:
+        raise HTTPException(400, "duration must be 6-90 seconds")
+    if b.get("platform") not in reel.PLATFORMS.values():
+        raise HTTPException(400, f"platform must be one of {sorted(reel.PLATFORMS.values())}")
+    if isinstance(b.get("colors"), str):
+        b["colors"] = [c for c in b["colors"].replace(",", " ").split() if c.startswith("#")]
+    reel.save(con, rid, brief=b)
+    return _reel(rid)
+
+
+@app.post("/api/reels/{rid}/assets")
+async def add_reel_asset(rid: str, file: UploadFile, role: str = Form("product"), note: str = Form("")):
+    _reel(rid)
+    try:
+        reel.add_asset(con, rid, role, file.filename or "file", await file.read(), note)
+    except Exception as e:  # bad type, too big, not really an image
+        raise HTTPException(400, f"could not add that file: {e}")
+    return _reel(rid)
+
+
+@app.post("/api/reels/{rid}/storyboard")
+def make_storyboard(rid: str):
+    return _reel_bg(rid, reel.storyboard)
+
+
+@app.put("/api/reels/{rid}/scenes/{sid}")
+def edit_scene(rid: str, sid: str, fields: dict):
+    _idle(rid)
+    try:
+        reel.update_scene(con, rid, sid, fields)
+    except KeyError:
+        raise HTTPException(404, "no such scene")
+    except (ValueError, TypeError) as e:  # pydantic ValidationError is a ValueError
+        raise HTTPException(400, f"scene not saved: {str(e)[:300]}")
+    return _reel(rid)
+
+
+@app.post("/api/reels/{rid}/produce")
+def produce_reel(rid: str):
+    if not _reel(rid).get("spec"):
+        raise HTTPException(400, "make a storyboard first")
+    return _reel_bg(rid, reel.produce)
+
+
+@app.post("/api/reels/{rid}/scenes/{sid}/regenerate")
+def regenerate_scene(rid: str, sid: str):
+    """New take of one scene, then re-assemble: other scenes are reused (their hashes are unchanged)."""
+    _idle(rid)
+    try:
+        reel.regenerate(con, rid, sid)
+    except KeyError:
+        raise HTTPException(404, "no such scene")
+    return _reel_bg(rid, reel.produce)
+
+
+@app.post("/api/reels/{rid}/scenes/{sid}/replace")
+async def replace_scene(rid: str, sid: str, file: UploadFile):
+    _idle(rid)
+    if sid not in reel.scene_state(con, rid):
+        raise HTTPException(404, "no such scene")
+    try:
+        a = reel.add_asset(con, rid, "product", file.filename or "file", await file.read(), f"replacement for {sid}")
+    except Exception as e:
+        raise HTTPException(400, f"could not add that file: {e}")
+    if a["kind"] not in ("image", "video"):
+        raise HTTPException(400, "replace a scene with an image or a video")
+    reel.replace(con, rid, sid, a["id"])
+    return _reel_bg(rid, reel.produce)
+
+
+@app.post("/api/reels/{rid}/export")
+def export_reel(rid: str):
+    if not (_reel(rid).get("renders") or {}).get("preview"):
+        raise HTTPException(400, "produce a preview first")
+    return _reel_bg(rid, reel.export)
+
+
+@app.get("/reels/{rid}/{name}")
+def reel_file(rid: str, name: str):
+    """preview.mp4 / final.mp4, an uploaded asset by id, or a scene's current visual by scene id."""
+    r = _reel(rid)
+    name = Path(name).name
+    if name in ("preview.mp4", "final.mp4"):
+        path = reel.folder(rid) / name
+    else:
+        a = next((a for a in r["assets"] if a["id"] == name), None)
+        s = next((s for s in r["scenes"] if s["id"] == name), None)
+        path = Path(a["path"]) if a else Path(((s or {}).get("state") or {}).get("asset", {}).get("path") or "")
+    if not path.is_file():
+        raise HTTPException(404, "not made yet")
+    dl = name == "final.mp4"
+    return FileResponse(path, filename=f"{reel.safe_name(r['spec']['title'] if r.get('spec') else rid)}.mp4" if dl else None)

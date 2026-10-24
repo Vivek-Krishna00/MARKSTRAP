@@ -1,7 +1,7 @@
 # MarkStrap — Handover (2026-10-25)
 
 Read this first, then `CLAUDE.md` and `docs/architecture.md`. Repo: github.com/Vivek-Krishna00/MARKSTRAP, branch
-`main` (commits go straight to main). `make test` = 29 passing.
+`main` (commits go straight to main). `make test` = 40 passing.
 
 ## What this is
 Hackathon project; every tool and model inside the product is open source / open weight.
@@ -26,6 +26,7 @@ Hackathon project; every tool and model inside the product is open source / open
 | Agency layer | `engine/brief.py` | materials (text/URL/PDF), brief extraction, next-experiment proposal |
 | Images | `engine/render.py` | **approved** concepts only; open-weight model behind an OpenAI-compatible images endpoint (`IMAGE_BASE_URL`, e.g. FLUX.1-schnell via LocalAI). **Parked** by the user: no host yet (free trial has 0 GPU quota; CPU SD-Turbo or upgrade for an L4 are the options) |
 | API / UI | `engine/api.py`, `web/app.html`, `web/console.html`, `site/` | `/` site, `/app`, `/console`, `/favicon.png`; site via `make site`; site depends on React only (reveals are CSS + IntersectionObserver in `site/src/motion.jsx`) |
+| Reel Director | `engine/reel.py`, `engine/reel_providers.py`, `engine/compose.py`, `#reel/<id>` in `web/app.html`, `docs/reel-director.md` | approved concept → pydantic-validated storyboard (model, 1 re-ask, else template) → per-scene visuals (image endpoint / upload / Openverse / motion graphics) → Piper voice → captions → critic (rules + model, 11 criteria) repairs only weak scenes → MoviePy preview → 1080×1920 export. Per-scene status/hash; content-addressed cache; resumable after restart. `make reel-demo` needs no API. Remotion rejected: not open source |
 | Brand mark | `site/mark.py` → `web/mark.png`, `web/favicon.png` | Thomas attractor (b=0.133, x0=(1.1,1.1,-0.01), dt=0.05, RK4, 800k steps, yaw 45, pitch -34) density-rendered in viridis; used as favicon + nav symbol |
 
 ## Cloud setup (done 2026-10-25, project `project-1fba041d-5a2a-46ea-a94` "My First Project")
@@ -79,7 +80,7 @@ Hackathon project; every tool and model inside the product is open source / open
   classifier + MiroFish hand-off + risk slice, idle fine-tune) is **parked, not built**. Fine-tuning is dropped.
 
 ## Not built / deferred
-Phase-2 spec above; OASIS for the makers' interact phase; video rendering (images only); guardrails/legal labelling;
+Phase-2 spec above; OASIS for the makers' interact phase; generated video clips (Reels use stills, uploads and motion graphics until an open video model is hosted); guardrails/legal labelling;
 auto-posting; MiroFish's report agent / graph builder / UI.
 
 ## User preferences
@@ -89,6 +90,7 @@ auto-posting; MiroFish's report agent / graph builder / UI.
 - Wants existing open-source projects reused ("don't reinvent the wheel").
 
 ## Open flags
+- Reel voice uses Piper (GPL-3.0, optional install); app has no auth, so Reel endpoints are open to anyone who can reach the server.
 - `audience/` is AGPL-3.0 (copied MiroFish code); keep `audience/LICENSE` + `NOTICE`.
 - Kanishk's repo (copula data) has no licence — confirm with him.
 - Docker image build untested (now also builds the OASIS venv; heavy because of torch).

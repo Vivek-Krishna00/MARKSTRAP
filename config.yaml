@@ -79,3 +79,32 @@ oasis:                            # MiroFish/OASIS audience (audience/), AUDIENC
 
 audience:
   age_range: [18, 45]             # [U] ages sampled uniformly for simulated people
+
+reel:                             # Reel Director (engine/reel.py) and composer (engine/compose.py)
+  duration_s: 20                  # default reel length; the brief can change it (6-90)
+  fps: 30
+  size: [1080, 1920]
+  preview_size: [540, 960]
+  preview_fps: 15
+  safe_top: 250                   # px at 1080x1920 kept clear of text for platform UI (scaled for preview)
+  safe_bottom: 480
+  safe_side: 80
+  hook_max_s: 3.0                 # the first scene must end by this
+  min_scene_s: 1.0
+  wpm: 165                        # speaking rate: word budget per scene, and the silent-voice fallback's length
+  caption_words: 4                # words on screen per caption page
+  caption_max_chars: 24           # per caption line
+  onscreen_max_chars: 42
+  music_volume: 0.35
+  duck_volume: 0.1                # music level while the voiceover speaks
+  duck_ramp_s: 0.15
+  sfx_volume: 0.5
+  transition_s: 0.35
+  ken_burns: 0.12                 # zoom change over one still scene
+  critic_rounds: 1                # automatic critic -> repair passes per production (cost cap)
+  repair_max_scenes: 3            # scenes revised per pass
+  repair_threshold: 6             # a criterion scoring below this (0-10) gets its scenes repaired
+  director_retries: 1             # re-asks when the storyboard fails validation, then the template director
+  render_timeout_s: 900
+  provider_timeout_s: 120
+  upload_max_mb: 200

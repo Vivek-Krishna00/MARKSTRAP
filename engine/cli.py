@@ -27,6 +27,8 @@ def main():
     s.add_parser("snapshot")
     s.add_parser("rollback").add_argument("snapshot_id")
     s.add_parser("check-ai").add_argument("--image", action="store_true", help="also render one test image")
+    r = s.add_parser("reel-demo", help="render the demo reel fixture end to end (no paid providers)")
+    r.add_argument("--final", action="store_true", help="also export the 1080x1920 MP4")
     a = p.parse_args()
     con = db.connect()
 
@@ -41,6 +43,23 @@ def main():
             t = time.time()
             path = render.render("check-ai", {"platform": "instagram", "visual": "A study lamp on a wooden desk, warm light"}, {}, {})
             print(f"images  OK  {os.getenv('IMAGE_MODEL')}  {time.time() - t:.1f}s  saved {path}")
+        return
+    if a.cmd == "reel-demo":
+        from . import reel
+        d = json.loads(reel.DEMO.read_text())
+        rid = reel.create(con, d["ad"]["id"], reel.prefill(d["ad"], d["campaign"]))
+        logo = reel.ROOT.parent.parent / "web" / "mark.png"
+        if logo.exists():
+            reel.add_asset(con, rid, "logo", "logo.png", logo.read_bytes())
+        reel.set_spec(con, rid, d["spec"])
+        for step in [reel.produce] + ([reel.export] if a.final else []):
+            reel.claim(rid)
+            step(con, rid)
+        v = reel.view(con, rid)
+        print(f"{rid}  critic {v['critic']['overall']}/10  providers {v['providers']}")
+        for k in ("preview", "final"):
+            if k in v["renders"]:
+                print(f"  {k}: {reel.folder(rid) / v['renders'][k]}")
         return
     if a.cmd == "new-campaign":
         db.DB_PATH.unlink(missing_ok=True)

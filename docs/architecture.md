@@ -32,6 +32,7 @@ The simulation filters, reality judges. Everything else serves that loop.
 | Audience feed (optional) | `audience/` (own Python 3.11 venv), `engine/audience.py` | MiroFish's OASIS runner (AGPL-3.0, copied), OASIS / camel-oasis (Apache-2.0); `AUDIENCE_BACKEND=oasis` |
 | Audience memory | `engine/memory.py` | Graphiti + FalkorDB (or SQLite fallback) |
 | API + dashboard | `engine/api.py`, `web/index.html` | FastAPI, vanilla JS |
+| Reel Director | `engine/reel.py`, `engine/reel_providers.py`, `engine/compose.py` | pydantic, MoviePy + ffmpeg, Pillow, Piper TTS, Openverse (optional) |
 | Config / dials | `config.yaml` | YAML |
 
 ## Nature · nurture · breeders
@@ -75,3 +76,10 @@ one full generation with the 100-person feed (6 rounds) ≈ 440 s.
 - Graphiti is opt-in (`MEMORY_BACKEND=graphiti`): it needs an embeddings endpoint.
 - No image rendering; visuals are evolved as descriptions (the design defers rendering to survivors anyway).
 - Later per design: Loka, relegation, team economy, executives, classifier judge (D69–D71), fine-tuning.
+
+## Reel Director (approved concepts only)
+`reel.prefill` (concept + campaign brief + constraints) → `reel.direct` (open model, validated `ReelSpec`, template
+fallback) → user edits → `reel.produce`: `stage_assets` → `stage_voice` → `stage_captions` → `critique` →
+`revise_scene` for weak scenes only (timing locked, capped) → `timeline` → `compose` (subprocess) → preview;
+`reel.export` → 1080×1920. Planning stays in `reel.py`; `compose.py` only draws the timeline. Tables `reels`,
+`reel_scenes` (status/error/attempts/hashes per scene), `reel_assets`; files in `data/reels/`. Details: `docs/reel-director.md`.
