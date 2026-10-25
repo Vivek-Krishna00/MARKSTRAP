@@ -1,6 +1,6 @@
 import { api, C } from '../api.js';
 import { METRICS } from '../copy.js';
-import { Act, Empty, Eyebrow, Loading, Section, pad, toast, useLoad, when } from '../ui.jsx';
+import { Act, Empty, Loading, Section, pad, toast, useLoad, when } from '../ui.jsx';
 
 export default function Launch({ cid, c, reload: reloadCampaign }) {
   const q = useLoad(() => api.get(`${C(cid)}/launch`), [cid]);
@@ -11,7 +11,6 @@ export default function Launch({ cid, c, reload: reloadCampaign }) {
   return (
     <div className="cols">
       <div>
-        <Eyebrow>Step 4 · Launch</Eyebrow>
         <h2>Ready to <em className="s">go live.</em></h2>
         <p className="lead">Publish each piece yourself on its platform. MarkStrap never posts anything for you. People land on <b>{L.destination || 'your destination page'}</b>.</p>
         {L.items.length ? L.items.map((it, i) => (

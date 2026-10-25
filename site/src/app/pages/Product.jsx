@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { Icon } from '../icons.jsx';
 import { api } from '../api.js';
 import { PRODUCT_FIELDS } from '../copy.js';
-import { Act, Crumbs, Empty, Err, Eyebrow, Field, Loading, Prov, Section, toast, useLoad, when } from '../ui.jsx';
+import { Act, Crumbs, Empty, Err, Field, Loading, Prov, Section, toast, useLoad, when } from '../ui.jsx';
 
 export default function Product({ oid, pid }) {
   const q = useLoad(() => Promise.all([api.get(`/api/products/${pid}`), api.get(`/api/orgs/${oid}`)]), [pid]);
@@ -25,7 +26,7 @@ export default function Product({ oid, pid }) {
       <Crumbs items={[['Organizations', '#/orgs'], [o.name, `#/orgs/${oid}/products`], [p.name]]} />
       <div className="page">
         <div className="row between">
-          <div><Eyebrow>Product or service</Eyebrow><h1>{p.name}</h1></div>
+          <div><h1>{p.name}</h1></div>
           {p.status === 'approved' && <a className="btn" href={`#/campaigns/new?org=${oid}&product=${pid}`}>New campaign for {p.name}</a>}
         </div>
         <div className="row" style={{ marginBottom: 20 }}>
@@ -55,7 +56,7 @@ export default function Product({ oid, pid }) {
 
             <Section count={p.sources.length}>Material for this product</Section>
             {p.sources.length ? p.sources.map(s => (
-              <div key={s.id} className="item"><span className="k">▤</span>
+              <div key={s.id} className="item"><span className="k"><Icon name="file" /></span>
                 <span className="n"><b>{s.name}</b><small>{s.kind} · {when(s.added)}{s.confidential ? ' · confidential' : ''}</small></span>
                 <Act className="line tiny danger" run={async () => { await api.del(`/api/sources/${s.id}`); q.reload(); }}>Remove</Act></div>
             )) : <Empty>Nothing attached. Add a product sheet, photos or the store page.</Empty>}

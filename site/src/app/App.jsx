@@ -1,6 +1,7 @@
 import { ThemeToggle, Toaster } from './ui.jsx';
 import { useRoute } from './router.js';
 import { PRINCIPLE } from './copy.js';
+import { BorderArt, Mark } from './ink.jsx';
 import Home from './pages/Home.jsx';
 import { OrgList, OrgNew } from './pages/Orgs.jsx';
 import Org from './pages/Org.jsx';
@@ -25,19 +26,22 @@ export default function App() {
   const area = route.parts[0] || 'home';
   return (
     <>
+      <a className="skip" href="#main">Skip to content</a>
       <header className="top">
-        <a className="wordmark" href="/" aria-label="MarkStrap website"><img src="/favicon.png" alt="" width="28" height="28" /><span>MARK<b>STRAP</b></span></a>
+        <a className="brand" href="/" aria-label="MarkStrap website"><Mark /><span>markstrap</span></a>
         <nav aria-label="App">
           <a href="#/" className={area === 'home' ? 'on' : ''}>Home</a>
           <a href="#/orgs" className={area === 'orgs' || area === 'campaigns' ? 'on' : ''}>Organizations</a>
         </nav>
+        <span className="top-caption">Human direction. Continuous learning.</span>
         <ThemeToggle />
       </header>
-      <main key={route.parts.slice(0, 2).join('/')} className="fade"><Page route={route} /></main>
+      <BorderArt parts={route.parts} />
+      <main id="main" key={route.parts.slice(0, 2).join('/')} className="fade"><Page route={route} /></main>
       <footer className="foot">
-        <span>© MarkStrap</span><span className="muted">{PRINCIPLE}</span>
-        <a href="/">Website</a><a href="/console" title="For specialists: the creative engine underneath a campaign">Advanced: engine console</a>
-        <span style={{ marginLeft: 'auto' }}>Built on open-source models</span>
+        <span>{PRINCIPLE}</span>
+        <span className="sig">Human intent. Agent execution. Market evidence.</span>
+        <span className="foot-links"><a href="/">Website</a><a href="/console" title="For specialists: the creative engine underneath a campaign">Engine console ↗</a></span>
       </footer>
       <Toaster />
     </>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api, C } from '../api.js';
 import { go } from '../router.js';
-import { Act, Empty, Err, Eyebrow, Loading, Section, toast, useLoad } from '../ui.jsx';
+import { Act, Empty, Err, Loading, Section, toast, useLoad } from '../ui.jsx';
 
 function Item({ k, cid, caps, reload }) {
   const [err, setErr] = useState('');
@@ -51,7 +51,6 @@ export default function Assets({ cid, c, reload: reloadCampaign }) {
   return (
     <div className="cols">
       <div>
-        <Eyebrow>Step 3 · Assets</Eyebrow>
         <h2>From approved idea to <em className="s">finished asset.</em></h2>
         <p className="lead">Each approved concept becomes a caption, a visual brief and, if you want one, a Reel. Edit any scene without starting over.</p>
         {approved.length ? approved.map(k => <Item key={k.id} k={k} cid={cid} caps={caps} reload={reload} />)

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { Icon } from '../icons.jsx';
 import { api, C } from '../api.js';
 import { ASSET_TYPES, CRITERIA, REEL_STAGES, ROLES } from '../copy.js';
-import { Act, Empty, Err, Eyebrow, Loading, Section, pad, toast, useLoad } from '../ui.jsx';
+import { Act, Empty, Err, Loading, Section, pad, toast, useLoad } from '../ui.jsx';
 
 const PLATFORMS = [['instagram_reels', 'Instagram Reels'], ['tiktok', 'TikTok'], ['youtube_shorts', 'YouTube Shorts']];
 const IMG = /\.(png|jpe?g|webp|gif)$/i;
@@ -79,8 +80,7 @@ export default function Reel({ cid, rid, c, reload: reloadCampaign }) {
   return (
     <div className="cols">
       <div>
-        <a className="link" href={`#/campaigns/${cid}/assets`}>← Back to assets</a>
-        <Eyebrow>Reel</Eyebrow>
+        <a className="link back" href={`#/campaigns/${cid}/assets`}><Icon name="back" size={14} />Back to assets</a>
         <h2>From concept to <em className="s">Reel.</em></h2>
         <p className="lead">Plan every scene first, review it, then produce. Expensive generation starts only after you approve the storyboard, and edits re-make only the scenes they touch.</p>
 
@@ -126,7 +126,7 @@ export default function Reel({ cid, rid, c, reload: reloadCampaign }) {
           ))}</div></div>}
         <div style={{ marginTop: 12 }}>{R.assets.map(a => (
           <div key={a.id} className="item">
-            <span className="k">{a.kind === 'image' ? <img src={`/campaigns/${cid}/reels/${R.id}/${a.id}`} alt="" /> : a.kind === 'video' ? '▶' : a.kind === 'audio' ? '♪' : 'Aa'}</span>
+            <span className="k">{a.kind === 'image' ? <img src={`/campaigns/${cid}/reels/${R.id}/${a.id}`} alt="" /> : a.kind === 'video' ? <Icon name="play" /> : a.kind === 'audio' ? <Icon name="music" /> : <Icon name="type" />}</span>
             <span className="n"><b>{a.name}</b><small>{ROLES[a.role] || a.role}{a.meta?.note ? ` · ${a.meta.note}` : ''}</small></span><span className="tag">{a.id}</span>
           </div>
         ))}</div>

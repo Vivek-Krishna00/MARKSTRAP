@@ -64,7 +64,9 @@ export function Prov({ label, source }) {
   return <span className={`prov ${label}`} title={source ? `${help} Source: ${source}` : help}>{name}</span>;
 }
 
-export const Sim = ({ children = 'Simulated' }) => <span className="sim" title="Simulated reactions, not real customer behaviour">◌ {children}</span>;
+export const Sim = ({ children = 'Simulated' }) => <span className="sim" title="Simulated reactions, not real customer behaviour">{children}</span>;
+
+export const fromLabel = f => (/^set for/i.test(f) ? f : `From ${f}`);
 
 export function Field({ label, hint, value, onChange, placeholder, area, rows = 2, type = 'text', from, changed, wide, id, disabled }) {
   const fid = id || `f-${label.replace(/\W+/g, '-').toLowerCase()}`;
@@ -74,13 +76,12 @@ export function Field({ label, hint, value, onChange, placeholder, area, rows = 
       {area
         ? <textarea id={fid} rows={rows} value={value ?? ''} placeholder={placeholder} disabled={disabled} onChange={e => onChange(e.target.value)} />
         : <input id={fid} type={type} value={value ?? ''} placeholder={placeholder} disabled={disabled} onChange={e => onChange(e.target.value)} />}
-      {from && <div className={`from${changed ? ' changed' : ''}`}>{changed ? '✎ Changed for this campaign' : `↳ ${from}`}</div>}
+      {from && <div className={`from${changed ? ' changed' : ''}`}>{changed ? 'Changed for this campaign' : fromLabel(from)}</div>}
     </div>
   );
 }
 
 export const Section = ({ children, count }) => <div className="section">{children}{count !== undefined && <span className="count">{count}</span>}</div>;
-export const Eyebrow = ({ children }) => <div className="eyebrow">◆ {children}</div>;
 export const Err = ({ children }) => (children ? <div className="err" role="alert">{children}</div> : null);
 
 export function Empty({ art = EMPTY, children }) {
@@ -89,7 +90,13 @@ export function Empty({ art = EMPTY, children }) {
 
 export function Loading({ err }) {
   if (err) return <div className="page"><Err>{err}</Err></div>;
-  return <div className="page"><p className="note pulse">Loading…</p></div>;
+  return (
+    <div className="page" aria-busy="true" aria-label="Loading">
+      <div className="skel" style={{ width: '42%', height: 44 }} />
+      <div className="skel" style={{ width: '64%', height: 16, marginTop: 18 }} />
+      <div className="skel" style={{ width: '100%', height: 180, marginTop: 34 }} />
+    </div>
+  );
 }
 
 export function ThemeToggle() {

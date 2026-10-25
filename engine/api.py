@@ -25,6 +25,8 @@ SITE = WEB / "site"
 
 if (SITE / "assets").exists():  # built by `make site`
     app.mount("/assets", StaticFiles(directory=SITE / "assets"), name="site-assets")
+if (SITE / "art").exists():  # halftone artwork shared by the website and the app
+    app.mount("/art", StaticFiles(directory=SITE / "art"), name="site-art")
 
 
 @app.get("/")

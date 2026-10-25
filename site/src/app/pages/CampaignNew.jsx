@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
+import { Icon } from '../icons.jsx';
 import { api } from '../api.js';
 import { go } from '../router.js';
 import { CAMPAIGN_FIELDS, OBJECTIVES } from '../copy.js';
-import { Act, Crumbs, Err, Eyebrow, Field, Loading, Section, useLoad } from '../ui.jsx';
+import { Act, Crumbs, Err, Field, Loading, Section, useLoad } from '../ui.jsx';
 
 const AREA = ['audience', 'required_messages', 'brand_rules', 'prohibited_claims', 'instructions', 'success_metric', 'required_assets'];
 const GROUPS = [
@@ -21,7 +22,7 @@ export function CampaignForm({ fields, setFields, pre = {}, objective, setObject
       <div className="objs" role="radiogroup" aria-label="Objective">
         {Object.entries(OBJECTIVES).map(([k, [g, help]]) => (
           <button key={k} type="button" role="radio" aria-checked={objective === k} className={`obj${objective === k ? ' on' : ''}`} onClick={() => setObjective(k)}>
-            <span className="g">{g}</span><b>{k[0].toUpperCase() + k.slice(1)}</b><span>{help}</span>
+            <Icon name={g} className="g" size={20} /><b>{k[0].toUpperCase() + k.slice(1)}</b><span>{help}</span>
           </button>
         ))}
       </div>
@@ -72,7 +73,6 @@ export default function CampaignNew({ org, product }) {
     <>
       <Crumbs items={[o && [o.name, `#/orgs/${o.id}/campaigns`], ['New campaign']]} />
       <div className="page" style={{ maxWidth: 940 }}>
-        <Eyebrow>New campaign</Eyebrow>
         <h1>What is this campaign <em className="s">for?</em></h1>
         <p className="lead">We pre-fill what we already know from the organization and product, and show where each value came from. Changes here apply to this campaign only.</p>
         <div className="card">

@@ -1,3 +1,4 @@
+import { Icon } from '../icons.jsx';
 import { api, C } from '../api.js';
 import { STEPS } from '../copy.js';
 import { Crumbs, Loading, useLoad } from '../ui.jsx';
@@ -26,15 +27,15 @@ export default function Campaign({ cid, step, sub }) {
       <div className="page">
         <div className="row between" style={{ alignItems: 'flex-end', marginBottom: 18 }}>
           <div>
-            <div className="kicker">Campaign · {c.fields.objective || 'no objective yet'}</div>
-            <h1 style={{ marginTop: 6 }}>{c.name}</h1>
+            <h1>{c.name}</h1>
+            <p className="meta">{c.fields.objective ? c.fields.objective[0].toUpperCase() + c.fields.objective.slice(1) : 'No objective yet'} · {c.org.name}{c.product ? ` · ${c.product.name}` : ''}</p>
           </div>
           <div className="row"><span className={`tag ${c.todo ? 'warn' : 'ice'}`}>{c.stage}</span>{c.busy && <span className="tag ice pulse">working</span>}</div>
         </div>
         <nav className="steps" aria-label="Campaign steps">
           {STEPS.map(([k, label], i) => (
             <a key={k} href={`#/campaigns/${cid}/${k}`} className={`${cur === k ? 'on' : ''} ${done[k] && cur !== k ? 'done' : ''}`} aria-current={cur === k ? 'step' : undefined}>
-              <i>{done[k] && cur !== k ? '✓' : i + 1}</i>{label}
+              <i>{done[k] && cur !== k ? <Icon name="check" size={13} label="done" /> : String(i + 1).padStart(2, '0')}</i>{label}
             </a>
           ))}
         </nav>

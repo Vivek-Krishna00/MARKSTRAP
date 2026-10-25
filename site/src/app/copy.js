@@ -66,14 +66,14 @@ export const BRIEF_FIELDS = {
 };
 
 export const OBJECTIVES = {
-  'awareness': ['◎', 'More of the right people know you exist'],
-  'qualified inquiries': ['✉', 'Calls, forms and messages from real prospects'],
-  'registrations': ['✎', 'Sign-ups for an event, demo or trial'],
-  'enrollment': ['◆', 'Seats filled in a course or programme'],
-  'visits': ['⌂', 'Footfall, bookings or site visits'],
-  'installations': ['⇩', 'App installs from the right audience'],
-  'sales': ['₹', 'Orders and revenue'],
-  'evidence of demand': ['⚑', 'Proof people want it before you build'],
+  'awareness': ['eye', 'More of the right people know you exist'],
+  'qualified inquiries': ['mail', 'Calls, forms and messages from real prospects'],
+  'registrations': ['clipboard', 'Sign-ups for an event, demo or trial'],
+  'enrollment': ['seat', 'Seats filled in a course or programme'],
+  'visits': ['pin', 'Footfall, bookings or site visits'],
+  'installations': ['download', 'App installs from the right audience'],
+  'sales': ['cart', 'Orders and revenue'],
+  'evidence of demand': ['flag', 'Proof people want it before you build'],
 };
 
 export const PROV = {

@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from 'react';
 import { api, C } from '../api.js';
 import { go } from '../router.js';
 import { BRIEF_FIELDS, CAMPAIGN_FIELDS } from '../copy.js';
-import { Act, Empty, Err, Eyebrow, Section, toast } from '../ui.jsx';
+import { Act, fromLabel, Empty, Err, Section, toast } from '../ui.jsx';
 import { CampaignForm } from './CampaignNew.jsx';
 
 const BASIS = { organization: 'from the organization profile', product: 'from the product', campaign: 'from your campaign requirements' };
@@ -11,7 +11,7 @@ const LISTS = ['evidence'];
 function Basis({ b }) {
   if (!b) return null;
   if (b === 'assumption') return <span className="prov unconfirmed" title="Not stated anywhere in what you gave us">Assumption</span>;
-  return <span className="from">↳ {BASIS[b] || b}</span>;
+  return <span className="from">{BASIS[b] ? BASIS[b][0].toUpperCase() + BASIS[b].slice(1) : b}</span>;
 }
 
 function Requirements({ c, cid, reload }) {
@@ -35,7 +35,7 @@ function Requirements({ c, cid, reload }) {
     <div className="card">
       <div className="row between"><h4>Campaign requirements</h4><button className="link" onClick={() => setEdit(true)}>Edit</button></div>
       {filled.length ? <dl className="kv">{filled.map(([k, v]) => <Fragment key={k}><dt>{CAMPAIGN_FIELDS[k]?.[0] || k}</dt>
-        <dd>{String(v)}{c.field_sources[k] && <div className="from">↳ {c.field_sources[k]}</div>}</dd></Fragment>)}</dl>
+        <dd>{String(v)}{c.field_sources[k] && <div className="from">{fromLabel(c.field_sources[k])}</div>}</dd></Fragment>)}</dl>
         : <p className="note">Only the objective so far. Add the goal, audience, offer and rules for a sharper brief.</p>}
     </div>
   );
@@ -54,7 +54,6 @@ export default function Brief({ cid, c, reload }) {
     return (
       <div className="cols">
         <div>
-          <Eyebrow>Step 1 · Brief</Eyebrow>
           <h2>Let's write the <em className="s">brief.</em></h2>
           <p className="lead">We combine your approved organization profile, the product and these requirements into one clear brief. You check it before any ideas are made.</p>
           <Requirements c={c} cid={cid} reload={reload} />
@@ -74,7 +73,6 @@ export default function Brief({ cid, c, reload }) {
   return (
     <div className="cols">
       <div>
-        <Eyebrow>{confirmed ? 'Confirmed brief' : 'Brief to confirm'}</Eyebrow>
         <h2>{confirmed ? <>The brief is <em className="s">set.</em></> : <>Here's what we <em className="s">understood.</em></>}</h2>
         <p className="lead">{confirmed ? 'Concepts follow this brief. Editing it and confirming again starts the concepts over; what you learned from real results is kept.'
           : 'Correct anything that is off. Concepts are made only after you confirm.'}</p>

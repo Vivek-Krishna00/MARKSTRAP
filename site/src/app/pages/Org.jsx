@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { Icon } from '../icons.jsx';
 import { api } from '../api.js';
 import { go } from '../router.js';
 import { ORG_FIELDS, PROV } from '../copy.js';
-import { Act, Crumbs, Empty, Err, Eyebrow, Field, Loading, Prov, STACK, Section, toast, useLoad, when } from '../ui.jsx';
+import { Act, Crumbs, Empty, Err, Field, Loading, Prov, STACK, Section, toast, useLoad, when } from '../ui.jsx';
 
 const TABS = [['profile', 'Profile'], ['knowledge', 'Knowledge'], ['research', 'Research'], ['products', 'Products'], ['campaigns', 'Campaigns']];
-const KIND = { file: '▤', link: '⌁', note: '✎', crawl: '⌕', wikipedia: 'W' };
+const KIND = { file: 'file', link: 'link', note: 'note', crawl: 'search', wikipedia: 'globe' };
 const IMG = /\.(png|jpe?g|webp|gif|svg)$/i;
 
 export default function Org({ oid, tab }) {
@@ -19,20 +20,27 @@ export default function Org({ oid, tab }) {
   return (
     <>
       <Crumbs items={[['Organizations', '#/orgs'], [o.name]]} />
-      <div className="page">
-        <div className="row between">
-          <div><Eyebrow>Organization</Eyebrow><h1>{o.name}</h1></div>
-          <a className="btn" href={`#/campaigns/new?org=${oid}`}>New campaign</a>
-        </div>
-        <p className="lead">{o.fields.description || 'Add a short description in the profile, or let research suggest one.'}{o.researched_at ? ` · Last researched ${when(o.researched_at)}` : ''}</p>
-        <nav className="steps" aria-label="Organization sections">
+      <div className="page org-shell">
+        <header className="org-head">
+          <div className="org-id" aria-hidden="true">{o.name.slice(0, 2).toUpperCase()}</div>
+          <div className="org-title">
+            <span className="org-kicker">Organization workspace</span>
+            <h1>{o.name}</h1>
+            <p>{o.fields.description || 'Add a short description in the profile, or let research suggest one.'}</p>
+          </div>
+          <div className="org-actions">
+            {o.researched_at && <span className="org-updated">Research updated<br />{when(o.researched_at)}</span>}
+            <a className="btn" href={`#/campaigns/new?org=${oid}`}>New campaign <span aria-hidden="true">↗</span></a>
+          </div>
+        </header>
+        <nav className="steps org-tabs" aria-label="Organization sections">
           {TABS.map(([k, label]) => (
             <a key={k} href={`#/orgs/${oid}/${k}`} className={tab === k ? 'on' : ''} aria-current={tab === k ? 'page' : undefined}>
               {label}{badge[k] > 0 && <span className="count">{badge[k]}</span>}
             </a>
           ))}
         </nav>
-        <Tab o={o} reload={q.reload} />
+        <div className="org-tabbody"><Tab o={o} reload={q.reload} /></div>
       </div>
     </>
   );
@@ -49,31 +57,63 @@ function Profile({ o, reload }) {
   const secs = o.profile.sections;
   const missing = o.findings.filter(x => x.section === 'missing' && x.status !== 'rejected');
   const pending = o.findings.filter(x => x.status === 'pending' && x.section !== 'missing').length;
+  const change = key => value => setF(x => ({ ...x, [key]: value }));
   return (
-    <div className="cols">
-      <div>
-        <Section>What you told us</Section>
-        <div className="card">
-          <p className="note" style={{ marginTop: 0 }}>Everything here is labelled <Prov label="provided" /> and is used as fact in every campaign.</p>
-          <Field label="Organization name" value={name} onChange={setName} />
-          <div className="fields">
-            {Object.entries(ORG_FIELDS).map(([k, [label, ph]]) => (
-              <Field key={k} label={label} value={f[k]} placeholder={ph} onChange={v => setF(x => ({ ...x, [k]: v }))}
-                area={['description', 'customers', 'competitors', 'notes'].includes(k)} wide={['description', 'notes'].includes(k)} />
-            ))}
-          </div>
-          <Err>{err}</Err>
-          <div className="actions">
-            <Act className="btn" disabled={!dirty} busy="Saving…" onError={setErr}
-              run={async () => { await api.patch(`/api/orgs/${o.id}`, { name, fields: f }); await reload(); toast('Profile saved'); }}>Save changes</Act>
-          </div>
+    <div className="profile-layout">
+      <div className="profile-main">
+        <div className="profile-intro">
+          <div><span className="overline">Profile source</span><h2>Your facts,<br /><em>kept separate.</em></h2></div>
+          <p>What you enter here is treated as first-party truth and reused across this organization’s campaigns. Research findings stay separate until you approve them.</p>
         </div>
 
-        <Section count={Object.values(secs).flat().length}>Approved profile</Section>
+        <div className="profile-form">
+          <section className="profile-group">
+            <header><span>01</span><div><h3>Identity</h3><p>The basics every campaign should inherit.</p></div></header>
+            <div className="profile-fields">
+              <Field label="Organization name" value={name} onChange={setName} />
+              <Field label={ORG_FIELDS.website[0]} value={f.website} placeholder={ORG_FIELDS.website[1]} onChange={change('website')} />
+              <Field label={ORG_FIELDS.description[0]} value={f.description} placeholder={ORG_FIELDS.description[1]} onChange={change('description')} area rows={3} wide />
+            </div>
+          </section>
+
+          <section className="profile-group">
+            <header><span>02</span><div><h3>Market</h3><p>Where the organization operates and who it serves.</p></div></header>
+            <div className="profile-fields">
+              <Field label={ORG_FIELDS.industry[0]} value={f.industry} placeholder={ORG_FIELDS.industry[1]} onChange={change('industry')} />
+              <Field label={ORG_FIELDS.market[0]} value={f.market} placeholder={ORG_FIELDS.market[1]} onChange={change('market')} />
+              <Field label={ORG_FIELDS.customers[0]} value={f.customers} placeholder={ORG_FIELDS.customers[1]} onChange={change('customers')} area rows={3} wide />
+            </div>
+          </section>
+
+          <section className="profile-group">
+            <header><span>03</span><div><h3>Brand</h3><p>The cues that should survive from one campaign to the next.</p></div></header>
+            <div className="profile-fields">
+              <Field label={ORG_FIELDS.voice[0]} value={f.voice} placeholder={ORG_FIELDS.voice[1]} onChange={change('voice')} />
+              <Field label={ORG_FIELDS.colours[0]} value={f.colours} placeholder={ORG_FIELDS.colours[1]} onChange={change('colours')} />
+            </div>
+          </section>
+
+          <section className="profile-group">
+            <header><span>04</span><div><h3>Context</h3><p>Useful boundaries and background for research and strategy.</p></div></header>
+            <div className="profile-fields">
+              <Field label={ORG_FIELDS.competitors[0]} value={f.competitors} placeholder={ORG_FIELDS.competitors[1]} onChange={change('competitors')} area rows={3} />
+              <Field label={ORG_FIELDS.notes[0]} value={f.notes} placeholder={ORG_FIELDS.notes[1]} onChange={change('notes')} area rows={3} />
+            </div>
+          </section>
+        </div>
+
+        <Err>{err}</Err>
+        <div className={`profile-save${dirty ? ' dirty' : ''}`}>
+          <span>{dirty ? 'Unsaved changes' : 'Everything is up to date'}</span>
+          <Act className="btn" disabled={!dirty} busy="Saving…" onError={setErr}
+            run={async () => { await api.patch(`/api/orgs/${o.id}`, { name, fields: f }); await reload(); toast('Profile saved'); }}>Save profile <span aria-hidden="true">→</span></Act>
+        </div>
+
+        <Section count={Object.values(secs).flat().length}>Approved research</Section>
         {Object.keys(secs).length ? (
-          <div className="card">
+          <div className="approved-profile">
             {Object.entries(o.sections).filter(([k]) => secs[k]).map(([k, title]) => (
-              <div key={k} style={{ padding: '10px 0', borderBottom: '1px solid var(--rule)' }}>
+              <div key={k} className="approved-section">
                 <div className="kicker">{title}</div>
                 {secs[k].map(i => <div key={i.id} className="row" style={{ marginTop: 6 }}><span>{String(i.value)}</span><Prov label={i.label} /></div>)}
               </div>
@@ -81,22 +121,28 @@ function Profile({ o, reload }) {
             <p className="note" style={{ marginBottom: 0 }}>Only findings you approved appear here and reach your campaigns.</p>
           </div>
         ) : <Empty>Nothing approved yet. Run research, then review what it found.</Empty>}
-        {pending > 0 && <div className="card warn" style={{ marginTop: 14 }}><b>{pending} findings are waiting for your review.</b> <a href={`#/orgs/${o.id}/research`}>Review them</a></div>}
-        {missing.length > 0 && <>
+        {pending > 0 && <div className="review-callout"><span>{String(pending).padStart(2, '0')}</span><b>Findings are waiting for your review.</b><a href={`#/orgs/${o.id}/research`}>Review them →</a></div>}
+        {missing.length > 0 && <section className="profile-gaps">
           <Section count={missing.length}>Missing information</Section>
-          <div className="card"><ul className="clean">{missing.map(m => <li key={m.id}>{String(m.value)} <Prov label="missing" /></li>)}</ul></div>
-        </>}
+          <div className="gap-list">{missing.map((m, i) => <div className="gap-row" key={m.id}>
+            <span>{String(i + 1).padStart(2, '0')}</span><b>{String(m.value)}</b><Prov label="missing" />
+          </div>)}</div>
+        </section>}
       </div>
-      <aside>
-        <div className="card"><h4>How labels work</h4>
-          {Object.entries(PROV).map(([k, [, help]]) => <p key={k} className="note" style={{ margin: '8px 0 0' }}><Prov label={k} /> {help}</p>)}
+      <aside className="profile-aside">
+        <div className="profile-aside-head"><span className="overline">Evidence key</span><h3>Know where every claim came from.</h3></div>
+        <div className="label-legend">
+          {Object.entries(PROV).map(([k, [, help]]) => <div key={k}><Prov label={k} /><p>{help}</p></div>)}
         </div>
-        <div className="card"><h4>Remove this organization</h4>
-          <p className="note">Hides it with its products and campaigns. Your files stay on this machine.</p>
-          {sure ? <div className="row"><Act className="line danger tiny" run={async () => { await api.del(`/api/orgs/${o.id}`); go('/orgs'); }}>Yes, remove</Act>
-            <button className="line tiny" onClick={() => setSure(false)}>Cancel</button></div>
-            : <button className="line tiny danger" onClick={() => setSure(true)}>Remove…</button>}
-        </div>
+        <p className="legend-note">Only provided facts and research you approve reach a campaign brief.</p>
+        <details className="danger-zone">
+          <summary>Organization settings</summary>
+          <div><h4>Remove this organization</h4><p>Hides it with its products and campaigns. Your files stay on this machine.</p>
+            {sure ? <div className="row"><Act className="line danger tiny" run={async () => { await api.del(`/api/orgs/${o.id}`); go('/orgs'); }}>Yes, remove</Act>
+              <button className="line tiny" onClick={() => setSure(false)}>Cancel</button></div>
+              : <button className="line tiny danger" onClick={() => setSure(true)}>Remove…</button>}
+          </div>
+        </details>
       </aside>
     </div>
   );
@@ -122,46 +168,58 @@ function Knowledge({ o, reload }) {
   };
   const send = async files => { for (const file of files) if (!(await add({ file }))) return; toast(`${files.length} file${files.length > 1 ? 's' : ''} added`); };
   return (
-    <div className="cols">
-      <div>
-        <p className="lead">Everything you add here becomes this organization's reusable knowledge. It supports research, every product and every future campaign.</p>
-        <div className={`drop${over ? ' over' : ''}`} role="button" tabIndex={0} onClick={() => fileRef.current.click()}
+    <div className="knowledge-layout">
+      <div className="knowledge-main">
+        <div className="knowledge-intro">
+          <div><span className="overline">Knowledge base</span><h2>Give the work<br /><em>something real.</em></h2></div>
+          <p>Everything you add becomes reusable context for research, products and future campaigns.</p>
+        </div>
+
+        <section className="knowledge-ingest">
+          <div className={`knowledge-drop${over ? ' over' : ''}`} role="button" tabIndex={0} onClick={() => fileRef.current.click()}
           onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && fileRef.current.click()}
           onDragOver={e => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
           onDrop={e => { e.preventDefault(); setOver(false); send([...e.dataTransfer.files]); }}>
-          <pre aria-hidden="true">{STACK}</pre>
-          <div><div className="big">Drop files, or click to choose</div>
-            <div className="note">Brand guidelines, catalogues, case studies, past campaigns, customer research, images, logos, videos</div>
-            <div className="tags" style={{ marginTop: 8 }}>{['pdf', 'txt', 'md', 'csv', 'images', 'logos', 'videos'].map(t => <span key={t} className="tag">{t}</span>)}</div></div>
-          <input ref={fileRef} type="file" multiple hidden onChange={e => send([...e.target.files])} />
-        </div>
-        <div className="fields">
-          <div><label className="f" htmlFor="k-url">Website or page link</label>
-            <div className="row" style={{ flexWrap: 'nowrap' }}><input id="k-url" value={url} placeholder="https://" onChange={e => setUrl(e.target.value)} />
-              <Act busy="Reading…" disabled={!url.trim()} run={async () => { if (await add({ url })) setUrl(''); }}>Add</Act></div></div>
-          <div><label className="f" htmlFor="k-note">Or in your own words</label>
-            <div className="row" style={{ flexWrap: 'nowrap' }}><input id="k-note" value={note} placeholder="What you do, who it's for, what makes it different" onChange={e => setNote(e.target.value)} />
-              <Act disabled={!note.trim()} run={async () => { if (await add({ text: note })) setNote(''); }}>Add</Act></div></div>
-        </div>
-        <div className="row" style={{ marginTop: 12 }}>
-          <label className="chk"><input type="checkbox" checked={conf} onChange={e => setConf(e.target.checked)} /> Confidential</label>
-          {products.length > 0 && <select style={{ width: 'auto' }} value={prod} onChange={e => setProd(e.target.value)} aria-label="Attach to a product">
-            <option value="">For the whole organization</option>{products.map(p => <option key={p.id} value={p.id}>For {p.name}</option>)}</select>}
-        </div>
-        <Err>{err}</Err>
+            <span className="knowledge-drop-index">01</span>
+            <pre aria-hidden="true">{STACK}</pre>
+            <div className="knowledge-drop-copy"><h3>Drop files, or click to choose</h3>
+              <p>Brand guidelines, catalogues, case studies, past campaigns, customer research, images, logos or videos.</p>
+              <span className="knowledge-formats">PDF · TXT · MD · CSV · IMAGES · LOGOS · VIDEOS</span></div>
+            <span className="knowledge-drop-action" aria-hidden="true">Choose files ↗</span>
+            <input ref={fileRef} type="file" multiple hidden onChange={e => send([...e.target.files])} />
+          </div>
 
-        <Section count={provided.length}>Your materials</Section>
-        {provided.length ? provided.map(s => <SourceRow key={s.id} s={s} o={o} reload={reload} />)
-          : <Empty>Nothing yet. Most organizations start with their website and a brand guide.</Empty>}
-        {found.length > 0 && <>
-          <Section count={found.length}>Read during research</Section>
-          {found.map(s => <SourceRow key={s.id} s={s} o={o} reload={reload} />)}
-        </>}
+          <div className="knowledge-adders">
+            <div className="knowledge-adder"><span className="knowledge-add-index">02</span><div><label className="f" htmlFor="k-url">Website or page link</label>
+              <div className="knowledge-field"><input id="k-url" value={url} placeholder="https://" onChange={e => setUrl(e.target.value)} />
+                <Act className="line" busy="Reading…" disabled={!url.trim()} run={async () => { if (await add({ url })) setUrl(''); }}>Add link</Act></div></div></div>
+            <div className="knowledge-adder"><span className="knowledge-add-index">03</span><div><label className="f" htmlFor="k-note">In your own words</label>
+              <div className="knowledge-field"><input id="k-note" value={note} placeholder="What you do, who it's for, what makes it different" onChange={e => setNote(e.target.value)} />
+                <Act className="line" disabled={!note.trim()} run={async () => { if (await add({ text: note })) setNote(''); }}>Add note</Act></div></div></div>
+          </div>
+
+          <div className="knowledge-options">
+            <label><input type="checkbox" checked={conf} onChange={e => setConf(e.target.checked)} /><span><b>Confidential</b><small>Use as context, never quote publicly</small></span></label>
+            {products.length > 0 && <label><span><b>Attach to</b><small>Choose where this context belongs</small></span><select value={prod} onChange={e => setProd(e.target.value)} aria-label="Attach to a product">
+              <option value="">Whole organization</option>{products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
+          </div>
+          <Err>{err}</Err>
+        </section>
+
+        <section className="knowledge-library">
+          <Section count={provided.length}>Your materials</Section>
+          {provided.length ? provided.map(s => <SourceRow key={s.id} s={s} o={o} reload={reload} />)
+            : <Empty>Nothing yet. Most organizations start with their website and a brand guide.</Empty>}
+          {found.length > 0 && <>
+            <Section count={found.length}>Read during research</Section>
+            {found.map(s => <SourceRow key={s.id} s={s} o={o} reload={reload} />)}
+          </>}
+        </section>
       </div>
-      <aside>
-        <div className="card"><h4>Confidential material</h4><p className="note">Used to understand your business, never quoted in public copy. If a concept repeats its wording, the review flags it before anything goes live.</p></div>
-        <div className="card"><h4>Next</h4><p className="note">When you've added what you have, let us research the organization and prepare an editable profile.</p>
-          <div className="actions" style={{ marginTop: 12 }}><a className="btn" href={`#/orgs/${o.id}/research`}>Go to research</a></div></div>
+      <aside className="knowledge-aside">
+        <section><span className="overline">Private by design</span><h3>Confidential stays confidential.</h3><p>It can help the system understand your business, but it will never be quoted in public copy. Repeated wording is flagged before anything goes live.</p></section>
+        <section className="knowledge-next"><span className="overline">Next step</span><strong>Research</strong><p>When you have added what you know, look for the facts you do not.</p>
+          <a href={`#/orgs/${o.id}/research`}>Continue to research <span>→</span></a></section>
       </aside>
     </div>
   );
@@ -172,7 +230,7 @@ function SourceRow({ s, o, reload }) {
   const img = s.path && IMG.test(s.path);
   return (
     <div className="item">
-      <span className="k">{img ? <img src={`/api/sources/${s.id}/file`} alt="" /> : KIND[s.kind] || '▤'}</span>
+      <span className="k">{img ? <img src={`/api/sources/${s.id}/file`} alt="" /> : <Icon name={KIND[s.kind] || 'file'} />}</span>
       <span className="n"><b>{s.url ? <a href={s.url} target="_blank" rel="noreferrer">{s.name}</a> : s.name}</b>
         <small>{s.origin === 'research' ? 'public source' : s.kind} · {when(s.added)}{product ? ` · ${product.name}` : ''}{s.chars ? ` · ${s.chars.toLocaleString()} characters read` : ''}</small></span>
       <span className="row">
@@ -198,50 +256,65 @@ function Research({ o, reload }) {
   const solid = o.findings.filter(f => f.status === 'pending' && ['provided', 'research'].includes(f.label));
   const research = o.sources.filter(s => s.origin === 'research');
   return (
-    <div className="cols">
-      <div>
-        <div className={`card${running ? ' ice' : ''}`}>
-          <h3>{running ? 'Researching…' : o.researched_at ? 'Research again' : 'Research this organization'}</h3>
-          {running ? <>
-            <p className="note pulse">{st.step || 'Working'}. You can leave this page; it keeps going.</p>
+    <div className="research-layout">
+      <div className="research-main">
+        <section className={`research-plan${running ? ' running' : ''}`}>
+          <div className="research-plan-head">
+            <div>
+              <span className="overline">Research scope</span>
+              <h2>{running ? 'Researching…' : o.researched_at ? <>Research<br /><em>again.</em></> : <>Research this<br /><em>organization.</em></>}</h2>
+            </div>
+            <p>Choose exactly what MarkStrap may read. Nothing enters a campaign until you approve it.</p>
+          </div>
+          {running ? <div className="research-running">
+            <p className="pulse">{st.step || 'Working'}. You can leave this page; it keeps going.</p>
             <div className="stagebar"><i style={{ width: '60%' }} /></div>
-          </> : <>
-            <p className="note" style={{ marginTop: 0 }}>With your approval, we will read only:</p>
-            <ul className="clean">
-              <li>{plan.website ? <>Your website <span className="mono">{plan.website}</span>, up to {plan.max_pages} pages</> : <>No website yet. <a href={`#/orgs/${o.id}/profile`}>Add one in the profile</a></>}</li>
-              <li>{plan.competitors.length ? <>Competitor home pages: {plan.competitors.join(', ')}</> : 'No competitor websites listed'}</li>
-              <li>The Wikipedia article for “{plan.wikipedia}”, if there is one</li>
-              <li>{plan.materials}</li>
-            </ul>
-            <p className="note">Findings are not used anywhere until you approve them. Re-running replaces earlier public sources and pending findings; what you approved or rejected stays.</p>
-            <div className="actions" style={{ marginTop: 14 }}>
-              <Act className="btn" busy="Starting…" run={async () => { await api.post(`/api/orgs/${o.id}/research`, { approved: true }); await reload(); }}>Research with my approval</Act>
+          </div> : <>
+            <ol className="research-scope">
+              <li><span>01</span><div><b>Organization website</b><p>{plan.website ? <><span className="mono">{plan.website}</span> · up to {plan.max_pages} pages</> : <>No website yet. <a href={`#/orgs/${o.id}/profile`}>Add one in the profile</a>.</>}</p></div></li>
+              <li><span>02</span><div><b>Competitor pages</b><p>{plan.competitors.length ? plan.competitors.join(', ') : 'No competitor websites listed.'}</p></div></li>
+              <li><span>03</span><div><b>Public reference</b><p>The Wikipedia article for “{plan.wikipedia}”, if there is one.</p></div></li>
+              <li><span>04</span><div><b>Knowledge base</b><p>{plan.materials}</p></div></li>
+            </ol>
+            <div className="research-consent">
+              <p>Re-running replaces earlier public sources and pending findings. Approved and rejected decisions stay.</p>
+              <Act className="btn" busy="Starting…" run={async () => { await api.post(`/api/orgs/${o.id}/research`, { approved: true }); await reload(); }}>Research with my approval <span aria-hidden="true">→</span></Act>
             </div>
           </>}
           {st.status === 'failed' && <Err>Research stopped: {st.error}</Err>}
-          {(st.notes || []).length > 0 && <ul className="clean" style={{ marginTop: 10 }}>{st.notes.map((n, i) => <li key={i} className="note">{n}</li>)}</ul>}
-        </div>
+          {(st.notes || []).length > 0 && <ul className="clean research-notes">{st.notes.map((n, i) => <li key={i} className="note">{n}</li>)}</ul>}
+        </section>
 
-        {order.length > 0 && <div className="row between" style={{ marginTop: 26 }}>
-          <h3 style={{ margin: 0 }}>Findings to review</h3>
+        {order.length > 0 && <div className="findings-head">
+          <div><span className="overline">Approval queue</span><h3>Findings to review</h3></div>
           {solid.length > 0 && <Act className="line tiny" run={async () => { await api.post('/api/findings/bulk', { ids: solid.map(f => f.id), status: 'approved' }); reload(); }}>
             Approve {solid.length} backed by a source</Act>}
         </div>}
         {order.map(k => (
-          <div key={k}>
+          <section className="finding-group" key={k}>
             <Section count={groups[k].length}>{k === 'missing' ? 'Missing information' : o.sections[k]}</Section>
-            <div className="card tight">{groups[k].map(f => <FindingRow key={f.id} f={f} o={o} reload={reload} />)}</div>
-          </div>
+            <div className="finding-list">{groups[k].map(f => <FindingRow key={f.id} f={f} o={o} reload={reload} />)}</div>
+          </section>
         ))}
         {!order.length && !running && <Empty>No findings yet.</Empty>}
       </div>
-      <aside>
-        <div className="card"><h4>Never assumptions as facts</h4><p className="note">Each finding carries a label. We set it by checking the quoted evidence against the source, not by trusting the model.</p>
-          {Object.keys(PROV).map(k => <div key={k} style={{ marginTop: 6 }}><Prov label={k} /></div>)}</div>
-        <div className="card"><h4>Research sources <span className="count">{research.length}</span></h4>
-          {research.length ? research.map(s => <p key={s.id} className="note" style={{ margin: '6px 0 0' }}><a href={s.url} target="_blank" rel="noreferrer">{s.name}</a></p>)
-            : <p className="note">None yet.</p>}
-          {o.researched_at && <p className="note">Latest research: {when(o.researched_at)}</p>}</div>
+      <aside className="research-aside">
+        <section className="research-key">
+          <span className="overline">Evidence key</span>
+          <h3>Evidence before confidence.</h3>
+          <p>Labels describe where a claim came from—not how convincing it sounds.</p>
+          <div className="research-labels">
+            {Object.entries(PROV).map(([k, value]) => <div key={k}><Prov label={k} /><small>{value[1]}</small></div>)}
+          </div>
+        </section>
+        <section className="research-sources">
+          <div className="research-sources-head"><span className="overline">Research sources</span><strong>{research.length}</strong></div>
+          <div className="research-source-list">
+            {research.length ? research.map((s, i) => <a key={s.id} href={s.url} target="_blank" rel="noreferrer"><span>{String(i + 1).padStart(2, '0')}</span><b>{s.name}</b><i aria-hidden="true">↗</i></a>)
+              : <p>None yet.</p>}
+          </div>
+          {o.researched_at && <p className="research-updated">Latest research<br />{when(o.researched_at)}</p>}
+        </section>
       </aside>
     </div>
   );
@@ -295,37 +368,49 @@ function Products({ o, reload }) {
   const list = o.products.filter(p => p.status !== 'merged' && (showArchived || p.status !== 'archived'));
   const live = o.products.filter(p => ['approved', 'draft'].includes(p.status));
   return (
-    <div className="cols">
-      <div>
-        <p className="lead">An organization can have many products or services. Campaigns can use a product only after you approve its information.</p>
-        {list.length ? list.map(p => (
-          <div key={p.id} className="item">
-            <span className="k">◇</span>
-            <span className="n"><b><a href={`#/orgs/${o.id}/products/${p.id}`}>{p.name}</a></b>
-              <small>{p.fields.category || p.fields.description || 'No description'}</small></span>
-            <span className="row">
-              {p.status === 'draft' && <><Prov label={p.field_labels?.description || 'research'} /><span className="tag warn">needs approval</span>
-                <Act className="line tiny" run={async () => { await api.patch(`/api/products/${p.id}`, { status: 'approved' }); reload(); }}>Approve</Act></>}
-              {p.status === 'approved' && <span className="tag good">approved</span>}
-              {p.status === 'archived' ? <Act className="line tiny" run={async () => { await api.patch(`/api/products/${p.id}`, { status: 'approved' }); reload(); }}>Restore</Act>
-                : <Act className="line tiny" run={async () => { await api.patch(`/api/products/${p.id}`, { status: 'archived' }); reload(); }}>Archive</Act>}
-            </span>
-          </div>
-        )) : <Empty>No products yet. Add one below, or run research to find them.</Empty>}
-        <label className="chk" style={{ marginTop: 12 }}><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} /> Show archived</label>
+    <div className="product-layout">
+      <div className="product-main">
+        <div className="product-intro">
+          <div><span className="overline">Product library</span><h2>What {o.name}<br /><em>takes to market.</em></h2></div>
+          <p>Keep each product’s facts, proof and restrictions in one place. Only approved information can enter a campaign.</p>
+        </div>
 
-        <Section>Add a product or service</Section>
-        <div className="card">
-          <div className="fields">
-            <Field label="Name" value={name} onChange={setName} placeholder="Xbox Game Pass" />
-            <Field label="Description" hint="optional" value={desc} onChange={setDesc} placeholder="What it is" />
-          </div>
-          <Err>{err}</Err>
-          <div className="actions">
-            <Act className="btn" disabled={!name.trim()} onError={setErr} run={async () => {
-              const p = await api.post(`/api/orgs/${o.id}/products`, { name, fields: { description: desc } });
-              go(`/orgs/${o.id}/products/${p.id}`);
-            }}>Add and fill in details</Act>
+        <div className="product-list-head">
+          <span>{list.length} {list.length === 1 ? 'product' : 'products'}</span>
+          <label className="archive-toggle"><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} /> Include archived</label>
+        </div>
+        <div className="product-list">
+          {list.length ? list.map((p, i) => (
+            <div key={p.id} className="product-row">
+              <span className="product-index">{String(i + 1).padStart(2, '0')}</span>
+              <span className="product-symbol"><Icon name="box" size={20} /></span>
+              <span className="product-name"><b><a href={`#/orgs/${o.id}/products/${p.id}`}>{p.name}</a></b>
+                <small>{p.fields.category || p.fields.description || 'Description not added yet'}</small></span>
+              <span className="product-state">
+                {p.status === 'draft' && <><Prov label={p.field_labels?.description || 'research'} /><span className="tag warn">needs approval</span>
+                  <Act className="line tiny" run={async () => { await api.patch(`/api/products/${p.id}`, { status: 'approved' }); reload(); }}>Approve</Act></>}
+                {p.status === 'approved' && <span className="tag good">approved</span>}
+                {p.status === 'archived' ? <Act className="line tiny" run={async () => { await api.patch(`/api/products/${p.id}`, { status: 'approved' }); reload(); }}>Restore</Act>
+                  : <Act className="line tiny" run={async () => { await api.patch(`/api/products/${p.id}`, { status: 'archived' }); reload(); }}>Archive</Act>}
+              </span>
+            </div>
+          )) : <Empty>No products yet. Add one below, or run research to find them.</Empty>}
+        </div>
+
+        <div className="create-product">
+          <div className="create-copy"><span className="overline">Add something new</span><h3>New product or service</h3><p>Start with a name. Add evidence, customers, benefits and campaign rules on the next screen.</p></div>
+          <div className="create-fields">
+            <div className="fields">
+              <Field label="Name" value={name} onChange={setName} placeholder="Xbox Game Pass" />
+              <Field label="Description" hint="optional" value={desc} onChange={setDesc} placeholder="What it is" />
+            </div>
+            <Err>{err}</Err>
+            <div className="actions">
+              <Act className="btn" disabled={!name.trim()} onError={setErr} run={async () => {
+                const p = await api.post(`/api/orgs/${o.id}/products`, { name, fields: { description: desc } });
+                go(`/orgs/${o.id}/products/${p.id}`);
+              }}>Add and fill in details <span aria-hidden="true">→</span></Act>
+            </div>
           </div>
         </div>
 
@@ -345,7 +430,12 @@ function Products({ o, reload }) {
           </div>
         </>}
       </div>
-      <aside><div className="card"><h4>From research</h4><p className="note">Products found during research start as <b>needs approval</b>. Open one to check and edit each detail first.</p></div></aside>
+      <aside className="product-aside">
+        <span className="aside-number">{String(o.products.filter(p => p.status === 'draft').length).padStart(2, '0')}</span>
+        <h3>Research suggestions</h3>
+        <p>Products found during research stay outside campaigns until you open them, check the details and approve them.</p>
+        <a href={`#/orgs/${o.id}/research`}>Review research <span>→</span></a>
+      </aside>
     </div>
   );
 }
@@ -362,7 +452,7 @@ function Campaigns({ o }) {
           <a key={c.id} className="todo" href={`#/campaigns/${c.id}/${c.where}`}>
             <span className="tag ice">{c.stage}</span>
             <span><b>{c.name}</b><small>{o.products.find(p => p.id === c.product_id)?.name || 'Whole organization'} · updated {when(c.updated)}</small></span>
-            <span className="note">{c.todo || 'Open'} →</span>
+            <span className="go">{c.todo || 'Open'} <Icon name="arrow" size={14} /></span>
           </a>
         )) : <Empty>No campaigns yet.</Empty>}
       </div>

@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { Icon } from '../icons.jsx';
 import { api } from '../api.js';
 import { go } from '../router.js';
 import { ORG_FIELDS } from '../copy.js';
-import { Act, Crumbs, Empty, Err, Eyebrow, Field, Loading, useLoad } from '../ui.jsx';
+import { Act, Crumbs, Empty, Err, Field, Loading, useLoad } from '../ui.jsx';
 
 export function OrgList() {
   const { data, err } = useLoad(() => api.get('/api/orgs'));
@@ -12,18 +13,20 @@ export function OrgList() {
       <Crumbs items={[['Organizations']]} />
       <div className="page">
         <div className="row between">
-          <div><Eyebrow>Organizations</Eyebrow><h1>Your <em className="s">clients</em> and brands.</h1></div>
-          <a className="btn" href="#/orgs/new">New organization</a>
+          <div><h1>Your <em className="s">clients</em> and brands.</h1></div>
+          <a className="btn" href="#/orgs/new"><Icon name="plus" size={16} />New organization</a>
         </div>
         <p className="lead">Each organization keeps its own knowledge, products, campaigns and lessons. Nothing is shared between organizations.</p>
         {data.length ? (
-          <div className="grid auto">
+          <div className="org-list">
             {data.map(o => (
-              <a key={o.id} className="card tile" href={`#/orgs/${o.id}`}>
-                <h3>{o.name}</h3>
-                <p className="note" style={{ margin: '0 0 8px' }}>{o.fields.industry || o.fields.description || 'No description yet'}</p>
-                <div className="tags"><span className="tag">{o.products} products</span><span className="tag">{o.campaigns} campaigns</span>
-                  {o.pending_findings > 0 && <span className="tag warn">{o.pending_findings} to review</span>}</div>
+              <a key={o.id} className="org-list-row" href={`#/orgs/${o.id}`}>
+                <span className="org-list-monogram">{o.name.slice(0, 2).toUpperCase()}</span>
+                <span className="org-list-name"><b>{o.name}</b><small>{o.fields.industry || o.fields.description || 'No description yet'}</small></span>
+                <span className="org-list-counts">{o.products} {o.products === 1 ? 'product' : 'products'} <i /> {o.campaigns} {o.campaigns === 1 ? 'campaign' : 'campaigns'}</span>
+                {o.pending_findings > 0
+                  ? <span className="org-review"><b>Profile</b><span>Review</span><Icon name="arrow" size={16} /></span>
+                  : <span className="org-open">Open <Icon name="arrow" size={16} /></span>}
               </a>
             ))}
           </div>
@@ -42,7 +45,6 @@ export function OrgNew() {
     <>
       <Crumbs items={[['Organizations', '#/orgs'], ['New']]} />
       <div className="page" style={{ maxWidth: 860 }}>
-        <Eyebrow>Step 1 · Organization</Eyebrow>
         <h1>Who are we <em className="s">working for?</em></h1>
         <p className="lead">Only the name is needed now. Skip anything you don't have; you can come back and fill it in, and research can find much of it for you.</p>
         <div className="card">

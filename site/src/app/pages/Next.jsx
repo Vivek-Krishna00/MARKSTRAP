@@ -1,6 +1,6 @@
 import { api, C } from '../api.js';
 import { go } from '../router.js';
-import { Act, Empty, Eyebrow, Section, when } from '../ui.jsx';
+import { Act, Empty, Section, when } from '../ui.jsx';
 
 const List = ({ title, items, kind = '' }) => (
   <div><div className="label" style={{ margin: '14px 0 6px' }}>{title}</div>
@@ -16,7 +16,6 @@ export default function Next({ cid, c, reload }) {
   return (
     <div className="cols">
       <div>
-        <Eyebrow>Step 6 · Next experiment</Eyebrow>
         <h2>One change, <em className="s">clearly tested.</em></h2>
         <p className="lead">Changing many things at once makes the next result impossible to read. This experiment changes one thing and keeps the rest the same.</p>
         <div className="card ice">

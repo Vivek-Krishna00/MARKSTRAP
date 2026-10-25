@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { api, C } from '../api.js';
 import { go } from '../router.js';
 import { METRICS } from '../copy.js';
-import { Act, Empty, Err, Eyebrow, Loading, Section, Sim, toast, useLoad } from '../ui.jsx';
+import { Act, Empty, Err, Loading, Section, Sim, toast, useLoad } from '../ui.jsx';
 
 function Entry({ it, metrics, set, row }) {
   const rest = Object.keys(METRICS).filter(m => !metrics.includes(m));
@@ -70,7 +70,6 @@ export default function Results({ cid, c, reload: reloadCampaign }) {
   return (
     <div className="cols">
       <div>
-        <Eyebrow>Step 5 · Results</Eyebrow>
         <h2>What <em className="s">really</em> happened.</h2>
         <p className="lead">Enter the numbers from each platform. For a {c.fields.objective || 'campaign'} objective, the first fields matter most. A weak result for one creative is not proof the offer has no market.</p>
         {L.items.length ? <>

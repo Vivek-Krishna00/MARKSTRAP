@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { Icon } from '../icons.jsx';
 import { api, C } from '../api.js';
 import { REACTIONS } from '../copy.js';
-import { Act, Empty, Err, Eyebrow, Loading, Section, Sim, pct, toast, useLoad } from '../ui.jsx';
+import { Act, Empty, Err, Loading, Section, Sim, pct, toast, useLoad } from '../ui.jsx';
 
 const COLORS = { share: 'var(--r-share)', engage: 'var(--r-engage)', ignore: 'var(--r-ignore)', dislike: 'var(--r-dislike)' };
 const FIT = { yes: ['good', 'Follows it'], partly: ['warn', 'Partly'], no: ['bad', 'Does not follow it'] };
@@ -114,7 +115,7 @@ function Concept({ k, cid, reload, selected, toggle }) {
         <Err>{err}</Err>
         <div className="actions" style={{ marginTop: 18 }}>
           {k.decision === 'approved'
-            ? <><a className="btn tiny" href={`#/campaigns/${cid}/assets`}>Create assets →</a><Act className="line tiny" run={() => decide('')}>Undo approval</Act></>
+            ? <><a className="btn tiny" href={`#/campaigns/${cid}/assets`}>Create assets <Icon name="arrow" size={14} /></a><Act className="line tiny" run={() => decide('')}>Undo approval</Act></>
             : <Act className="btn tiny" run={() => decide('approved')}>Approve</Act>}
           {k.decision !== 'saved' && k.decision !== 'approved' && <Act className="line tiny" run={() => decide('saved')}>Save for later</Act>}
           {k.decision === 'rejected' ? <Act className="line tiny" run={() => decide('')}>Undo reject</Act>
@@ -196,7 +197,6 @@ export default function Concepts({ cid, c, reload: reloadCampaign }) {
   const approved = list.filter(k => k.decision === 'approved').length;
   return (
     <div>
-      <Eyebrow>Step 2 · Concepts</Eyebrow>
       <h2>Ideas, given a <em className="s">fair test.</em></h2>
       <p className="lead">{list.length} distinct concepts, each tested on {d.people} simulated people. {d.limits}</p>
 
@@ -228,7 +228,7 @@ export default function Concepts({ cid, c, reload: reloadCampaign }) {
             <button className="line tiny" disabled={chosen.length < 2} onClick={() => setView(view === 'combine' ? '' : 'combine')}>Combine parts</button>
             <button className="link" onClick={() => { setSel([]); setView(''); }}>Clear</button>
           </>}
-          {approved > 0 && <a className="btn tiny" style={{ marginLeft: 'auto' }} href={`#/campaigns/${cid}/assets`}>Create assets for {approved} approved →</a>}
+          {approved > 0 && <a className="btn tiny" style={{ marginLeft: 'auto' }} href={`#/campaigns/${cid}/assets`}>Create assets for {approved} approved <Icon name="arrow" size={14} /></a>}
         </div>
       )}
       <div className="actions">
