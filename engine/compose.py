@@ -4,6 +4,7 @@ No planning here: every time, position, colour and level comes from the timeline
 cached; each frame only moves, fades and stacks them. Run: python -m engine.compose timeline.json out.mp4
 """
 import json
+import re
 import sys
 import wave
 from functools import lru_cache
@@ -30,6 +31,46 @@ def ease(x):
 
 def lerp(a, b, p):
     return a + (b - a) * p
+
+
+def back(x):
+    """Ease-out with a small overshoot: stamps and slams land, then settle."""
+    x = min(1.0, max(0.0, x)) - 1
+    return 1 + 2.7 * x ** 3 + 1.7 * x ** 2
+
+
+BAYER = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]) / 16 + 1 / 32
+ASCII = " .:-=+*#%@"
+
+
+def field(kind: str, i: int, lt: float, w: int, h: int) -> np.ndarray:
+    """A slowly moving 0..1 pattern per scene purpose; the brand's dither/ASCII look gives it character."""
+    y, x = np.mgrid[0:h, 0:w]
+    x, y = x / w, y / w  # square units: x 0..1, y 0..h/w
+    if kind == "hook":  # shockwave rings out of the spotlight
+        r = np.hypot(x - 0.5, (y - 0.38 * h / w))
+        return np.clip(0.5 + 0.5 * np.sin(26 * r - 7 * lt) - 1.6 * r + 0.25, 0, 1)
+    if kind == "problem":  # falling rain, one speed per column
+        rng = np.random.default_rng(i)
+        speed, phase = rng.uniform(0.25, 0.9, w), rng.uniform(0, 1, w)
+        v = (y * w / h * 1.4 + lt * speed[None, :] + phase[None, :]) % 1.0
+        return np.where(rng.uniform(0, 1, w)[None, :] < 0.55, v ** 6, 0.0)
+    if kind == "demonstration":  # diagonal waves
+        return 0.5 + 0.5 * np.sin(9 * (x + y) - 2.6 * lt) * np.sin(4 * (x - y) + 1.3 * lt)
+    if kind == "proof":  # ripple from the top right corner
+        r = np.hypot(x - 1.0, y)
+        return np.clip(0.5 + 0.5 * np.sin(30 * r - 5 * lt) - 0.55 * r, 0, 1)
+    if kind == "payoff":  # rotating sunburst behind the stamp
+        cx, cy = 0.5, 0.33 * h / w
+        a = np.arctan2(y - cy, x - cx)
+        return np.clip((0.5 + 0.5 * np.sin(14 * a + 1.2 * lt)) * (1.25 - np.hypot(x - cx, y - cy)), 0, 1)
+    pts = [(0.5 + 0.35 * np.sin(lt * 0.7 + k * 2.1 + i), (0.4 + 0.3 * np.cos(lt * 0.5 + k * 1.7)) * h / w)
+           for k in range(3)]  # drifting blobs
+    return np.clip(sum(0.045 / ((x - px) ** 2 + (y - py) ** 2 + 0.02) for px, py in pts) / 3, 0, 1)
+
+
+NUM = re.compile(r"\d[\d,]*(?:\.\d+)?")
+PRICE = re.compile(r"[₹$€£]\s?\d[\d,]*(?:\.\d+)?")
 
 
 @lru_cache(maxsize=64)
@@ -148,6 +189,221 @@ class Reel:
         v = self.videos[s["id"]]
         return cover(Image.fromarray(v.get_frame(lt % max(v.duration - 0.05, 0.05))), self.W, self.H)
 
+    # ---------- motion-graphics designs: one layout per scene purpose (the director picked the purpose) ----------
+
+    @lru_cache(maxsize=32)
+    def backdrop(self, i: int, purpose: str) -> Image.Image:
+        W, H = self.W, self.H
+        y, x = np.mgrid[0:H, 0:W]
+        x, y = x / W, y / H
+        d, a, l = (np.array(c, float) for c in (self.dark, self.accent, self.light))
+        if purpose == "hook":  # spotlight glow behind the slam
+            g = np.clip(1 - np.hypot(x - 0.5, (y - 0.4) * 0.8) / 0.62, 0, 1) ** 1.6 * 0.85
+        elif purpose == "problem":  # dim, flat, a little claustrophobic
+            g = 0.12 + 0.1 * y
+            d = d * 0.7
+        elif purpose == "demonstration":
+            g = np.clip((x + y) / 2, 0, 1) ** 1.3 * 0.75
+        elif purpose == "proof":  # dark with a quiet dot grid
+            g = 0.18 * y + 0.35 * (((x * W) % (W / 18) < W / 200) & ((y * H) % (W / 18) < W / 200))
+        elif purpose == "payoff":
+            g = 0.95 - 0.55 * y
+        else:
+            g = (y ** 1.6) * (0.9 if i % 2 == 0 else 0.5)
+        img = d[None, None] * (1 - g[..., None]) + a[None, None] * g[..., None]
+        return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8))
+
+    @lru_cache(maxsize=1)
+    def grain_layers(self) -> list:
+        rng = np.random.default_rng(3)
+        out = []
+        for _ in range(3):
+            n = rng.integers(0, 255, (self.H // 2, self.W // 2), dtype=np.uint8)
+            layer = Image.merge("RGBA", [Image.fromarray(n)] * 3 + [Image.new("L", n.shape[::-1], 14)])
+            out.append(layer.resize((self.W, self.H), Image.NEAREST))
+        return out
+
+    @lru_cache(maxsize=256)
+    def text_layer(self, text: str, size: float, color: tuple, max_w: float = 0.84) -> Image.Image:
+        f = font(self.fpath, int(self.W * size))
+        lines = wrap(text, f, int(self.W * max_w)) or [""]
+        lh = int(f.size * 1.12)
+        img = Image.new("RGBA", (self.W, lh * len(lines) + int(f.size * 0.3)), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        for j, line in enumerate(lines):
+            d.text((self.W / 2, j * lh), line, font=f, fill=color, anchor="ma")
+        return img
+
+    def design(self, s: dict, i: int, lt: float, dur: float, text: bool = True) -> Image.Image:
+        img = self.backdrop(i, s["purpose"]).convert("RGBA")
+        self.texture(img, s, i, lt)
+        t, kind = s["text"], s["purpose"]
+        if text and t:
+            if kind == "hook":
+                self.slam(img, t, lt)
+            elif kind == "problem":
+                self.typewriter(img, t, lt)
+            elif kind == "proof" and NUM.search(t):
+                self.counter(img, t, lt)
+            elif kind == "payoff" and PRICE.search(t):
+                self.price_tag(img, t, lt)
+            elif kind == "demonstration":
+                self.card(img, t, lt, dur)
+            else:
+                layer = self.title_layer(t, True)
+                a = ease(lt / 0.35)
+                self.paste(img, layer, int(self.H * 0.36 - layer.height / 2 + (1 - a) * self.H * 0.03), a)
+        img.alpha_composite(self.grain_layers()[int(lt * 12) % 3])
+        return img
+
+    @lru_cache(maxsize=4)
+    def ascii_atlas(self, cell: int) -> np.ndarray:
+        f = font(self.fpath, int(cell * 1.1), "Bold")
+        out = np.zeros((len(ASCII), cell, cell), np.uint8)
+        for k, ch in enumerate(ASCII):
+            im = Image.new("L", (cell, cell))
+            ImageDraw.Draw(im).text((cell / 2, cell / 2), ch, font=f, fill=255, anchor="mm")
+            out[k] = np.asarray(im)
+        return out
+
+    def texture(self, img, s: dict, i: int, lt: float):
+        """Moving dither (or ASCII) layer between the backdrop and the text."""
+        tx = self.tl.get("texture") or {}
+        kind = s["purpose"]
+        if kind in ("problem", "cta") and tx.get("ascii"):
+            cell = max(8, self.W // 34)
+            cols, rows = self.W // cell + 1, self.H // cell + 1
+            idx = np.clip((field(kind, i, lt, cols, rows) * len(ASCII)).astype(int), 0, len(ASCII) - 1)
+            a = self.ascii_atlas(cell)[idx].transpose(0, 2, 1, 3).reshape(rows * cell, cols * cell)[:self.H, :self.W]
+            col = self.light
+            alpha = (a.astype(np.uint16) * tx["ascii"] // 255).astype(np.uint8)
+        elif tx.get("dither"):
+            px = max(2, self.W // 135)  # chunky dither pixels
+            w, h = self.W // px + 1, self.H // px + 1
+            f = field(kind, i, lt, w, h)
+            mask = f > np.tile(BAYER, (h // 4 + 1, w // 4 + 1))[:h, :w]
+            alpha = np.kron(mask.astype(np.uint8) * tx["dither"], np.ones((px, px), np.uint8))[:self.H, :self.W]
+            col = self.accent if kind != "payoff" else self.dark
+        else:
+            return
+        layer = np.empty((self.H, self.W, 4), np.uint8)
+        layer[..., :3] = col
+        layer[..., 3] = alpha
+        img.alpha_composite(Image.fromarray(layer, "RGBA"))
+
+    @lru_cache(maxsize=32)
+    def slam_layout(self, text: str):
+        f = font(self.fpath, int(self.W * 0.13))
+        lines = wrap(text.upper(), f, int(self.W * 0.86))
+        lh, sp = int(f.size * 1.08), f.getlength(" ")
+        top = self.H * 0.38 - lh * len(lines) / 2
+        out, k = [], 0
+        for li, line in enumerate(lines):
+            ws = line.split()
+            x = (self.W - f.getlength(line)) / 2
+            for w in ws:
+                col = self.accent if (k % 3 == 2 or w is ws[-1] and li == len(lines) - 1) else self.light
+                im = Image.new("RGBA", (int(f.getlength(w)) + 4, int(f.size * 1.25)), (0, 0, 0, 0))
+                ImageDraw.Draw(im).text((2, 0), w, font=f, fill=col)
+                out.append((im, x + im.width / 2, top + li * lh + im.height / 2))
+                x += f.getlength(w) + sp
+                k += 1
+        return out
+
+    def slam(self, img, text, lt):
+        words = self.slam_layout(text)
+        last = max(0.0, min(len(words) - 1, (lt - 0.05) / 0.13))
+        shake = np.sin(lt * 70) * self.W * 0.008 * np.exp(-((lt - 0.05) % 0.13) * 18) if lt < 0.05 + 0.13 * len(words) else 0
+        for k, (im, cx, cy) in enumerate(words):
+            p = (lt - 0.05 - k * 0.13) / 0.16
+            if p <= 0:
+                continue
+            sc = 1 + 0.9 * (1 - ease(p))
+            w = im.resize((max(1, int(im.width * sc)), max(1, int(im.height * sc))))
+            if p < 1:
+                w.putalpha(w.getchannel("A").point(lambda v: int(v * min(1.0, p * 2))))
+            img.alpha_composite(w, (int(cx - w.width / 2 + shake), int(cy - w.height / 2)))
+        return last
+
+    def typewriter(self, img, text, lt):
+        n = int(len(text) * min(1.0, max(0.0, (lt - 0.1) / max(0.6, 0.035 * len(text)))))
+        f = font(self.fpath, int(self.W * 0.095))
+        lines = wrap(text[:n], f, int(self.W * 0.84)) or [""]
+        lh = int(f.size * 1.15)
+        y0 = self.H * 0.38 - lh * len(lines) / 2
+        d = ImageDraw.Draw(img)
+        for j, line in enumerate(lines):
+            d.text((self.W * 0.08, y0 + j * lh), line, font=f, fill=self.light)
+        if int(lt * 2.4) % 2 == 0 or n < len(text):  # blinking cursor
+            x = self.W * 0.08 + f.getlength(lines[-1]) + f.size * 0.08
+            y = y0 + (len(lines) - 1) * lh
+            d.rectangle((x, y + f.size * 0.12, x + f.size * 0.42, y + f.size * 1.05), fill=self.accent)
+
+    def counter(self, img, text, lt):
+        tok = NUM.search(text).group(0)
+        target = float(tok.replace(",", ""))
+        dec = len(tok.split(".")[1]) if "." in tok else 0
+        v = target * ease((lt - 0.1) / 0.9)
+        shown = f"{v:,.{dec}f}" if "," in tok else f"{v:.{dec}f}"
+        big = self.text_layer(shown, 0.24, self.accent)
+        self.paste(img, big, int(self.H * 0.25), ease(lt / 0.2))
+        y = self.H * 0.25 + big.height
+        if target <= 5 and dec:  # a rating: five stars fill as the number climbs
+            r, cx0 = self.W * 0.05, self.W / 2 - self.W * 0.24
+            d = ImageDraw.Draw(img, "RGBA")
+            for k in range(5):
+                cx, cy = cx0 + k * self.W * 0.12, y + r * 1.4
+                pts = [(cx + (r if j % 2 == 0 else r * 0.45) * np.sin(j * np.pi / 5),
+                        cy - (r if j % 2 == 0 else r * 0.45) * np.cos(j * np.pi / 5)) for j in range(10)]
+                fill = min(1.0, max(0.0, v - k))
+                d.polygon(pts, fill=(*self.accent, int(40 + 215 * fill)), outline=(*self.light, 120))
+            y += r * 3.2
+        rest = self.text_layer(text, 0.06, self.light)
+        self.paste(img, rest, int(y + self.H * 0.02), ease((lt - 0.4) / 0.4))
+
+    @lru_cache(maxsize=8)
+    def tag_layer(self, tok: str) -> Image.Image:
+        R = int(self.W * 0.24)
+        im = Image.new("RGBA", (2 * R + 8, 2 * R + 8), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        d.ellipse((4, 4, 2 * R + 4, 2 * R + 4), fill=self.light)
+        d.ellipse((4 + R * 0.08, 4 + R * 0.08, 2 * R + 4 - R * 0.08, 2 * R + 4 - R * 0.08), outline=self.dark,
+                  width=max(2, int(R * 0.02)))
+        f = font(self.fpath, int(R * 0.62 if len(tok) <= 4 else R * 0.5))
+        d.text((R + 4, R + 4), tok, font=f, fill=self.dark, anchor="mm")
+        return im.rotate(-9, resample=Image.BICUBIC, expand=True)
+
+    def price_tag(self, img, text, lt):
+        tok = PRICE.search(text).group(0).replace(" ", "")
+        tag = self.tag_layer(tok)
+        p = (lt - 0.1) / 0.35
+        if p > 0:
+            sc = lerp(1.7, 1.0, back(p))
+            t = tag.resize((max(1, int(tag.width * sc)), max(1, int(tag.height * sc))))
+            if p < 1:
+                t.putalpha(t.getchannel("A").point(lambda v: int(v * min(1.0, p * 3))))
+            img.alpha_composite(t, (int(self.W / 2 - t.width / 2), int(self.H * 0.33 - t.height / 2)))
+        rest = text.replace(PRICE.search(text).group(0), "").strip(" ·-,")
+        if rest:
+            self.paste(img, self.text_layer(rest, 0.075, self.light), int(self.H * 0.33 + tag.height * 0.55),
+                       ease((lt - 0.45) / 0.35))
+
+    def card(self, img, text, lt, dur):
+        W, H = self.W, self.H
+        cw, ch = W * 0.8, H * 0.27
+        y = lerp(H * 1.02, H * 0.25, back(lt / 0.55))
+        x0 = (W - cw) / 2
+        d = ImageDraw.Draw(img, "RGBA")
+        d.rounded_rectangle((x0 + W * 0.015, y + W * 0.025, x0 + cw + W * 0.015, y + ch + W * 0.025),
+                            radius=int(W * 0.05), fill=(0, 0, 0, 70))  # shadow
+        d.rounded_rectangle((x0, y, x0 + cw, y + ch), radius=int(W * 0.05), fill=self.light)
+        inner = self.text_layer(text, 0.075, self.dark, 0.7)
+        img.alpha_composite(inner, (0, int(y + ch * 0.38 - inner.height / 2)))
+        bx, by, bw, bh = x0 + cw * 0.1, y + ch * 0.78, cw * 0.8, ch * 0.06
+        d.rounded_rectangle((bx, by, bx + bw, by + bh), radius=int(bh / 2), fill=(*self.dark, 40))
+        d.rounded_rectangle((bx, by, bx + max(bh, bw * ease(lt / max(0.5, dur * 0.85))), by + bh),
+                            radius=int(bh / 2), fill=self.accent)
+
     # ---------- text layers (cached) ----------
 
     @lru_cache(maxsize=128)
@@ -221,14 +477,14 @@ class Reel:
         elif s["id"] in self.videos:
             img = self.video(s, lt)
         else:
-            img = self.motion(i, lt, dur)
+            img = self.design(s, i, lt, dur, text=i != len(self.scenes) - 1)
         img = img.convert("RGBA")
         last = i == len(self.scenes) - 1
         if last:
             return self.end_card(img, s, lt)
-        if s["text"]:
-            motion = s["id"] not in self.src and s["id"] not in self.videos
-            layer = self.title_layer(s["text"], motion)
+        motion = s["id"] not in self.src and s["id"] not in self.videos
+        if s["text"] and not motion:  # motion scenes draw their own text in design()
+            layer = self.title_layer(s["text"], False)
             a = ease(lt / 0.35)
             y = (self.H * 0.36 if motion else self.safe["top"] + self.H * 0.02) + (1 - a) * self.H * 0.03
             self.paste(img, layer, int(y - (layer.height / 2 if motion else 0)), a)
@@ -249,8 +505,15 @@ class Reel:
             self.paste(img, t, int(y), ease((lt - 0.15) / 0.4))
             y += t.height + H * 0.025
         if self.cta:
-            self.paste(img, self.cta_layer(self.cta), int(y + (1 - ease((lt - 0.3) / 0.4)) * H * 0.02),
-                       ease((lt - 0.3) / 0.4))
+            btn = self.cta_layer(self.cta)
+            pulse = 1 + 0.035 * max(0.0, np.sin(2 * np.pi * 1.1 * (lt - 0.7))) if lt > 0.7 else 1
+            if pulse != 1:  # the button breathes once it has landed
+                bw, bh = int(btn.width * pulse), int(btn.height * pulse)
+                cut = (bw - W) // 2  # the layer is frame-wide: scale it, then crop back to the frame
+                btn = btn.resize((bw, bh)).crop((cut, 0, cut + W, bh))
+                self.paste(img, btn, int(y - (bh - self.cta_layer(self.cta).height) / 2), 1)
+            else:
+                self.paste(img, btn, int(y + (1 - ease((lt - 0.3) / 0.4)) * H * 0.02), ease((lt - 0.3) / 0.4))
         return img
 
     @lru_cache(maxsize=4)
@@ -344,18 +607,10 @@ def mix(tl: dict) -> np.ndarray:
         a = int(v["start"] * SR)
         x = x[:max(0, n - a)]
         out[a:a + len(x)] += x
-    rng = np.random.default_rng(7)
-    for fx in tl["sfx"]:
-        if fx["kind"] == "whoosh":
-            L = int(0.4 * SR)
-            noise = np.convolve(rng.standard_normal(L), np.ones(24) / 24, mode="same")
-            e = np.sin(np.linspace(0, np.pi, L)) ** 2
-            clip, a = noise * e * 2.2, int((fx["t"] - 0.25) * SR)
-        else:  # pop
-            L = int(0.09 * SR)
-            tt = np.arange(L) / SR
-            clip, a = np.sin(2 * np.pi * (900 - 6000 * tt) * tt) * np.exp(-tt * 45), int(fx["t"] * SR)
-        a = max(0, a)
+    for fx in tl["sfx"]:  # only a soft low "tick" on scenes that ask for it; no noise sweeps (user: they hurt)
+        L = int(0.07 * SR)
+        tt = np.arange(L) / SR
+        clip, a = np.sin(2 * np.pi * 180 * tt) * np.exp(-tt * 60) * np.minimum(1, tt / 0.004), max(0, int(fx["t"] * SR))
         clip = clip[:max(0, n - a)] * tl["sfx_volume"]
         out[a:a + len(clip)] += clip
     peak = np.abs(out).max() if n else 0

@@ -2,7 +2,7 @@ PY := .venv/bin/python
 -include .env
 export
 
-.PHONY: help setup audience-setup reel-setup reel-demo reel-eval dev test up down logs gen falkordb index clean site ai-check
+.PHONY: help setup audience-setup reel-setup reel-demo reel-eval reel-screen dev test up down logs gen falkordb index clean site ai-check
 
 help:  ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -20,15 +20,22 @@ audience-setup:  ## Python 3.11 venv for the MiroFish/OASIS audience (AUDIENCE_B
 dev:  ## run API + dashboard locally on :8000
 	$(PY) -m uvicorn engine.api:app --reload --port 8000
 
-reel-setup:  ## Reel Director voice: Piper TTS (open source) + one English voice (~60 MB) in data/voices
-	$(PY) -m pip install -q piper-tts
-	mkdir -p data/voices && cd data/voices && ../../$(PY) -m piper.download_voices en_US-lessac-medium
+KOKORO_URL := https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0
+
+reel-setup:  ## Reel voices: Kokoro-82M (Apache-2.0, 54 voices incl. Hindi, ~350 MB) + Piper fallback, into data/voices
+	$(PY) -m pip install -q kokoro-onnx piper-tts
+	mkdir -p data/voices
+	cd data/voices && for f in kokoro-v1.0.onnx voices-v1.0.bin; do test -f $$f || curl -sSL -o $$f $(KOKORO_URL)/$$f; done
+	cd data/voices && test -f en_US-lessac-medium.onnx || ../../$(PY) -m piper.download_voices en_US-lessac-medium
 
 reel-demo:  ## render the demo reel fixture with no paid provider (scratch DB): make reel-demo FINAL=1
 	DB_PATH=data/reel-demo.db REEL_TEXT_PROVIDER=mock $(PY) -m engine.cli reel-demo $(if $(FINAL),--final)
 
 reel-eval:  ## proof that the Reel judge ranks broken < placeholder < real photos (needs VISION_PROVIDER, ~₹2)
 	DB_PATH=data/reel-eval.db $(PY) -m engine.cli reel-eval --repeats $(or $(N),3)
+
+reel-screen:  ## MiroFish feed screening of rendered Reels + fixed twins (Llama-weighted): make reel-screen [DB=data/engine.db]
+	DB_PATH=$(or $(DB),data/reel-eval.db) $(PY) -m engine.cli reel-screen $(REELS)
 
 site:  ## build the website (site/ -> web/site, served at /)
 	cd site && npm install --no-audit --no-fund && npm run build

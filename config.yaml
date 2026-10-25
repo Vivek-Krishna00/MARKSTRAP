@@ -91,6 +91,9 @@ reel:                             # Reel Director (engine/reel.py) and composer 
   safe_side: 80
   hook_max_s: 3.0                 # the first scene must end by this
   min_scene_s: 1.0
+  voice_speed: 1.05               # Kokoro speaking speed; "energetic" directions use _fast, "calm" ones _calm
+  voice_speed_fast: 1.15
+  voice_speed_calm: 0.95
   wpm: 165                        # speaking rate: word budget per scene, and the silent-voice fallback's length
   caption_words: 4                # words on screen per caption page
   caption_max_chars: 24           # per caption line
@@ -98,7 +101,9 @@ reel:                             # Reel Director (engine/reel.py) and composer 
   music_volume: 0.35
   duck_volume: 0.1                # music level while the voiceover speaks
   duck_ramp_s: 0.15
-  sfx_volume: 0.5
+  sfx_volume: 0.2                 # soft low tick only (noise whooshes were removed: too harsh)
+  texture_dither_alpha: 80        # moving dithered background texture on motion-graphics scenes (0 = off)
+  texture_ascii_alpha: 70         # moving ASCII background texture (problem and CTA scenes)
   transition_s: 0.35
   ken_burns: 0.12                 # zoom change over one still scene
   critic_rounds: 1                # automatic critic -> repair passes per production (cost cap)
@@ -109,6 +114,10 @@ reel:                             # Reel Director (engine/reel.py) and composer 
   vision_max_images: 5            # images per request (Llama 4 on Vertex allows 5); extra frames are tiled
   visual_variety_min: 0.12        # [U] mean pixel difference between scene frames; below = "scenes look alike"
   real_imagery_min: 0.5           # share of scenes that should show real photos/footage
+  screen_llama_weight: 0.7        # [U] screening score = weight x vision judge + (1 - weight) x MiroFish crowd (user: high)
+  screen_population: 100          # people in each screening feed (rounds from dials.oasis_rounds)
+  screen_judgements: 3            # vision judgements averaged per Reel (single reads vary by ~1.5 points)
+  screen_active_div: [4, 2]       # [U] population/4 .. population/2 act per round (engine uses /15../5): fair exposure
   render_timeout_s: 900
   provider_timeout_s: 120
   upload_max_mb: 200

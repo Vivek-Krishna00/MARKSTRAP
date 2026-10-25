@@ -5,6 +5,10 @@ import { ASSET_TYPES, CRITERIA, REEL_STAGES, ROLES } from '../copy.js';
 import { Act, Empty, Err, Loading, Section, pad, toast, useLoad } from '../ui.jsx';
 
 const PLATFORMS = [['instagram_reels', 'Instagram Reels'], ['tiktok', 'TikTok'], ['youtube_shorts', 'YouTube Shorts']];
+const SPEAKERS = [['auto', 'Auto (from the voice style)'], ['af_heart', 'Heart · warm female (US)'], ['af_bella', 'Bella · bright female (US)'],
+  ['am_michael', 'Michael · male (US)'], ['am_fenrir', 'Fenrir · deep male (US)'], ['bf_emma', 'Emma · female (UK)'],
+  ['bm_george', 'George · male (UK)'], ['hf_alpha', 'Alpha · female (Hindi)'], ['hm_omega', 'Omega · male (Hindi)']];
+const pct = x => `${Math.round(x * 100)}%`;
 const IMG = /\.(png|jpe?g|webp|gif)$/i;
 
 /* An input that saves when you leave it. */
@@ -99,6 +103,8 @@ export default function Reel({ cid, rid, c, reload: reloadCampaign }) {
           <div className="fields">
             <Choice label="Voiceover" value={b.voice || 'on'} options={[['on', 'Spoken voiceover'], ['off', 'No voice, captions and music only']]} disabled={busy} onSave={v => patch({ voice: v })} />
             <Choice label="Captions" value={b.captions || 'on'} options={[['on', 'Word-by-word captions'], ['off', 'No captions']]} disabled={busy} onSave={v => patch({ captions: v })} />
+            <Choice label="Language" value={b.language || 'English'} options={[['English', 'English'], ['Hindi', 'Hindi']]} disabled={busy} onSave={v => patch({ language: v })} />
+            <Choice label="Speaker" value={b.speaker || 'auto'} options={SPEAKERS} disabled={busy || b.voice === 'off'} onSave={v => patch({ speaker: v })} />
             <Saved label="Voice style" value={b.voiceStyle} placeholder="Warm, unhurried, a little playful" disabled={busy} onSave={v => patch({ voiceStyle: v })} />
             <Saved label="Music direction" value={b.musicDirection} placeholder="Cosy lo-fi, builds at the end" disabled={busy} onSave={v => patch({ musicDirection: v })} />
           </div>
@@ -166,6 +172,15 @@ export default function Reel({ cid, rid, c, reload: reloadCampaign }) {
           {(crit.history || []).map(h => <p key={h.round} className="note">Round {h.round}: repaired {h.repaired.join(', ')} automatically.</p>)}
           {crit.issues.length ? <ul className="clean" style={{ marginTop: 10 }}>{crit.issues.slice(0, 8).map((x, i) => <li key={i}>{x.sceneId && <span className="mono">{x.sceneId} </span>}{x.problem}{x.fix && <span className="note"> → {x.fix}</span>}</li>)}</ul>
             : <p className="note">No open issues.</p>}
+          {crit.screening && <>
+            <Section>{`MiroFish screening · ${crit.screening.people} people · ${Math.round(crit.screening.weight * 100)}% Llama`}</Section>
+            <table className="screen"><thead><tr><th>Version</th><th>Llama</th><th>Reach</th><th>Share</th><th>Engage</th><th>Crowd</th><th>Score</th></tr></thead>
+              <tbody>{crit.screening.posts.map(p => <tr key={p.post}><td>{p.post.includes('~') ? 'With fixes' : 'As rendered'}</td>
+                <td className="num">{p.llama.toFixed(1)}</td><td className="num">{pct(p.reach)}</td><td className="num">{pct(p.share_rate)}</td>
+                <td className="num">{pct(p.engage_rate)}</td><td className="num">{p.crowd.toFixed(1)}</td><td className="num"><b>{p.score.toFixed(1)}</b></td></tr>)}</tbody></table>
+            {crit.screening.posts.flatMap(p => (p.words || []).slice(0, 2).map((w, i) => <div key={p.post + i} className="quote" style={{ marginTop: 12 }}>“{w.text}”<small>— {w.persona}, {w.age} · {p.post.includes('~') ? 'with fixes' : 'as rendered'} · {w.reaction}</small></div>))}
+            <p className="note">Simulated people read Llama's description of the frames, not the pixels. "With fixes" describes an improved cut; it isn't rendered. Real results override all of this.</p>
+          </>}
         </>}
 
         {r.preview && <>

@@ -144,8 +144,8 @@ def test_critic_repairs_only_weak_scenes_within_cap(env, monkeypatch):
     spec = reel.set_spec(con, rid, s)
     real_tts = P.tts
 
-    def slow_tts(text, wpm):  # scene-02's voice runs long, like a slow real voice would
-        return real_tts(text + " ." * 40 if text == "short line" else text, wpm)
+    def slow_tts(text, wpm, *voice):  # scene-02's voice runs long, like a slow real voice would
+        return real_tts(text + " ." * 40 if text == "short line" else text, wpm, *voice)
     monkeypatch.setattr(P, "tts", slow_tts)
     revised = []
     real_revise = reel.revise_scene
@@ -205,7 +205,7 @@ def test_compose_renders_a_tiny_reel(tmp_path):
           "words": [{"w": "hello", "t0": 0.1, "t1": 0.5}, {"w": "there.", "t0": 0.5, "t1": 0.9}],
           "vo": [{"path": str(voice), "start": 0.1, "end": 1.1}],
           "music": {"path": None, "volume": 0.3, "duck": 0.1, "ramp": 0.1},
-          "sfx": [{"kind": "whoosh", "t": 1.0}], "sfx_volume": 0.5, "transition_s": 0.3,
+          "sfx": [{"kind": "pop", "t": 1.0}], "sfx_volume": 0.2, "transition_s": 0.3,
           "logo": str(img), "cta": "shop.in", "title": "t"}
     out = tmp_path / "o.mp4"
     compose.render(tl, str(out))
@@ -251,7 +251,8 @@ def test_api_reel_flow(env, monkeypatch, tmp_path):
         raise AssertionError("reel stayed busy")
     c.post(f"{base}/reels/{rid}/storyboard")
     v = wait()
-    assert v["status"] == "storyboard" and v["spec"]["durationSeconds"] == 15
+    assert v["status"] == "storyboard", (v["status"], v["error"])
+    assert v["spec"]["durationSeconds"] == 15
     sid = v["scenes"][1]["id"]
     assert c.put(f"{base}/reels/{rid}/scenes/{sid}", json={"assetType": "hologram"}).status_code == 400
     ok = c.put(f"{base}/reels/{rid}/scenes/{sid}", json={"onScreenText": "New line"}).json()
@@ -312,3 +313,41 @@ def test_frames_are_tiled_to_the_endpoint_limit_and_judge_is_optional(monkeypatc
     v = reel.visual_review(spec, {}, {}, None)
     assert v["scores"]["hook"] == 3 and "pacing" not in v["scores"]  # judge may only score what frames show
     assert v["scores"]["visual_quality"] < 9  # measured checks cap a generous judge
+
+
+def test_screening_keeps_twins_apart_and_weights_llama(env, monkeypatch):
+    from engine import audience, reel_screen
+    con, rid, _ = env
+    reel.set_spec(con, rid, DEMO["spec"])
+    (reel.folder(rid) / "preview.mp4").write_bytes(b"mp4")
+    monkeypatch.setattr(reel, "keyframes", lambda mp4, spec: [])
+    monkeypatch.setattr(reel, "judge_frames", lambda *a, **k: {
+        "scores": {"hook": 2, "visual_quality": 4}, "verdict": "cheap", "seen": "grey slides", "couldBe": "real cake",
+        "couldBeScore": 8, "stopScroll": 1, "issues": []})
+    people = [{"name": f"p{i}", "age": 20} for i in range(10)]
+    monkeypatch.setattr(reel_screen, "population", lambda *a: people)
+    feeds = []
+
+    def fake_feed(ads, ppl, lessons, rounds, active):
+        feeds.append(sorted(ads))
+        good = any("~" in k for k in ads)
+        return {"ads": {k: {"counts": {}, "reactions": [
+            {"persona": "p1", "reaction": "share" if good else "ignore", "parts": {"copy": {"why": "yum"}}}]}
+            for k in ads}}
+    monkeypatch.setattr(audience, "evaluate", fake_feed)
+    monkeypatch.setattr(reel_screen, "DOCS", reel.ROOT)  # don't overwrite the real report
+    rows = {r["post"]: r for r in reel_screen.screen(con)}
+    assert feeds == [["ad1"], ["ad1~fixed"]]  # separate feeds: nobody sees a Reel next to its own twin
+    w = reel.CFG["screen_llama_weight"]
+    assert rows["ad1"]["llama"] == 3 and rows["ad1"]["score"] == round(w * 3 + (1 - w) * rows["ad1"]["crowd"], 2)
+    assert rows["ad1~fixed"]["score"] > rows["ad1"]["score"] and rows["ad1~fixed"]["words"][0]["text"] == "yum"
+    assert reel.load(con, rid)["critic"]["screening"]["posts"]
+
+
+def test_voice_follows_language_and_direction():
+    spec = reel.validate(DEMO["spec"], []).model_dump()
+    spec["voiceover"]["voiceDirection"] = "deep male voice, energetic"
+    assert reel.voice_for(spec, {"language": "English"}) == ("am_michael", reel.CFG["voice_speed_fast"], "en-us")
+    spec["voiceover"]["voiceDirection"] = "warm, calm"
+    assert reel.voice_for(spec, {"language": "Hindi"}) == ("hf_alpha", reel.CFG["voice_speed_calm"], "hi")
+    assert reel.voice_for(spec, {"speaker": "bf_lily", "voice": "on"})[0] == "bf_lily"

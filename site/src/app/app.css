@@ -700,3 +700,9 @@ body:has(.home-dashboard) .border-art { opacity:.17; }
   .findings-head { align-items:flex-start; flex-direction:column; margin-top:56px; }
   .research-aside { display:block; }.research-sources { margin-top:48px; padding-top:24px; border-top:1px solid var(--line-hi); }
 }
+
+/* reel screening table */
+table.screen { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--rule); border-radius:12px; overflow:hidden; font-size:14px; }
+table.screen th { font:600 12px var(--sans); color:var(--dim); text-align:left; padding:10px 12px; border-bottom:1px solid var(--rule2); background:var(--ice-dim); }
+table.screen td { padding:10px 12px; border-bottom:1px solid var(--rule); } table.screen td.num { font-family:var(--mono); }
+@media (max-width:640px) { table.screen { display:block; overflow-x:auto; } }

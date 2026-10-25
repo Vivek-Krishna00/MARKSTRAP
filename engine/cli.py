@@ -29,6 +29,8 @@ def main():
     s.add_parser("check-ai").add_argument("--image", action="store_true", help="also render one test image")
     e = s.add_parser("reel-eval", help="proof: render bad / placeholder / real-photo variants, judge each blind")
     e.add_argument("--repeats", type=int, default=3)
+    sc = s.add_parser("reel-screen", help="screen rendered Reels (+ a fixed twin each) in the MiroFish feed")
+    sc.add_argument("reels", nargs="*", help="reel ids (default: latest per concept)")
     r = s.add_parser("reel-demo", help="render the demo reel fixture end to end (no paid providers)")
     r.add_argument("--final", action="store_true", help="also export the 1080x1920 MP4")
     a = p.parse_args()
@@ -49,6 +51,11 @@ def main():
     if a.cmd == "reel-eval":
         from . import reel_eval
         reel_eval.run(con, a.repeats)
+        return
+    if a.cmd == "reel-screen":
+        from . import reel_screen
+        reel_screen.screen(con, a.reels or None)
+        print("report: docs/reel-screening.md")
         return
     if a.cmd == "reel-demo":
         from . import reel

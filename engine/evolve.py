@@ -57,26 +57,7 @@ def seed_campaign(con, goal: str, market: str, ad_type: str, brief: dict | None 
     put(con, "dials", dict(CFG["dials"]))
     d = dials(con)
     seed = random.randrange(2**31)
-    sampled = personas.sample_people(d["population"], seed)
-    profiles = [personas.describe(f) for _, f in sampled]
-    people = []
-    for start in range(0, len(sampled), d["naming_batch"]):  # names + habits only, in batches
-        chunk = list(enumerate(zip(sampled, profiles)))[start:start + d["naming_batch"]]
-        got = llm.chat_json(
-            "You give names and media habits to audience archetypes for a marketing simulation. "
-            "Their age and personality are fixed; do not change or restate them. Every name is different.",
-            f"Target market: {market}\nCampaign: {goal}\nNames already used: {[p['name'] for p in people]}\n"
-            + "\n".join(f"{i}. Age {a}. {' '.join(t)}" for i, ((a, _), t) in chunk)
-            + '\nFor each numbered person return {"personas": [{"name": str, "habits": str (platforms, '
-              'when and why they scroll)}]} in the same order.', temperature=0.9)["personas"]
-        people += [dict(got[j % len(got)]) for j in range(len(chunk))]
-    used = set()
-    for i, p in enumerate(people):  # names are memory keys: keep them unique
-        if p.get("name") in used or not p.get("name"):
-            p["name"] = f"{p.get('name') or 'Person'} {i}"
-        used.add(p["name"])
-    put(con, "personas", [{**people[i], "age": a, "facets": f, "tendencies": t}
-                          for i, ((a, f), t) in enumerate(zip(sampled, profiles))])
+    put(con, "personas", make_people(goal, market, d["population"], d["naming_batch"], seed))
     put(con, "persona_seed", seed)
     for breed, b in CFG["breeds"].items():
         for caste, c in b["castes"].items():
@@ -184,6 +165,30 @@ def judge(people, ad, lessons):
 def sim_score(reactions, seen, boredom_rate):
     raw = statistics.mean(REACTION.get(r.get("reaction"), 0.0) for r in reactions) if reactions else 0.0
     return (raw + 0.5) / 1.5 * (1 - boredom_rate) ** seen
+
+
+def make_people(goal: str, market: str, n: int, batch: int, seed: int) -> list[dict]:
+    """n people from the personality model; the LLM only names them and gives media habits."""
+    sampled = personas.sample_people(n, seed)
+    profiles = [personas.describe(f) for _, f in sampled]
+    people = []
+    for start in range(0, len(sampled), batch):  # names + habits only, in batches
+        chunk = list(enumerate(zip(sampled, profiles)))[start:start + batch]
+        got = llm.chat_json(
+            "You give names and media habits to audience archetypes for a marketing simulation. "
+            "Their age and personality are fixed; do not change or restate them. Every name is different.",
+            f"Target market: {market}\nCampaign: {goal}\nNames already used: {[p['name'] for p in people]}\n"
+            + "\n".join(f"{i}. Age {a}. {' '.join(t)}" for i, ((a, _), t) in chunk)
+            + '\nFor each numbered person return {"personas": [{"name": str, "habits": str (platforms, '
+              'when and why they scroll)}]} in the same order.', temperature=0.9)["personas"]
+        people += [dict(got[j % len(got)]) for j in range(len(chunk))]
+    used = set()
+    for i, p in enumerate(people):  # names are memory keys: keep them unique
+        if p.get("name") in used or not p.get("name"):
+            p["name"] = f"{p.get('name') or 'Person'} {i}"
+        used.add(p["name"])
+    return [{**people[i], "age": a, "facets": f, "tendencies": t}
+            for i, ((a, f), t) in enumerate(zip(sampled, profiles))]
 
 
 def produce_and_judge(con, term, d):

@@ -5,8 +5,10 @@ Every route is scoped to /api/campaigns/{cid}; the campaign's own engine databas
 import csv
 import io
 import json
+import re
 import shutil
 import threading
+import traceback
 import time
 from pathlib import Path
 
@@ -358,8 +360,8 @@ def _reel_bg(cid, rid, fn):
         own = db.connect(path)
         try:
             fn(own, rid)
-        except Exception:  # recorded on the reel by the stage that failed
-            pass
+        except Exception:  # recorded on the reel by the stage that failed; logged in case recording failed too
+            traceback.print_exc()
         finally:
             reel.release(rid)
             own.close()
@@ -395,7 +397,7 @@ def edit_reel_brief(cid: str, rid: str, fields: dict):
     con = hub.con(cid)
     _idle(rid)
     b = _reel(con, rid)["brief"]
-    b.update({k: v for k, v in fields.items() if k in b})  # only known brief fields
+    b.update({k: v for k, v in fields.items() if k in b or k in ("speaker", "language")})  # only known fields
     try:
         b["durationSeconds"] = float(b["durationSeconds"])
     except (TypeError, ValueError):
@@ -406,6 +408,8 @@ def edit_reel_brief(cid: str, rid: str, fields: dict):
         raise HTTPException(400, f"platform must be one of {sorted(reel.PLATFORMS.values())}")
     if b.get("voice") not in ("on", "off") or b.get("captions") not in ("on", "off"):
         raise HTTPException(400, "voice and captions are on or off")
+    if not re.fullmatch(r"auto|[a-z]{2}_[a-z]+", b.get("speaker") or "auto"):
+        raise HTTPException(400, "speaker is auto or a voice name like af_heart")
     if isinstance(b.get("colors"), str):
         b["colors"] = [c for c in b["colors"].replace(",", " ").split() if c.startswith("#")]
     reel.save(con, rid, brief=b)

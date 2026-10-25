@@ -250,7 +250,7 @@ def prefill(ad: dict, campaign: dict) -> dict:
         "platform": PLATFORMS.get((c.get("platform") or "").lower(), "instagram_reels"),
         "durationSeconds": CFG["duration_s"],
         "brandVoice": k.get("brand_rules") or "warm, specific, no hype",
-        "language": k.get("language") or "English",
+        "language": k.get("language") or "English", "speaker": "auto",
         "colors": colors[:4], "fonts": ["Manrope"],
         "cta": b.get("action") or b.get("destination") or "Link in bio",  # a sentence reads better on screen than a URL
         "mustNot": k.get("restricted_claims") or "",
@@ -293,7 +293,7 @@ def template_spec(brief: dict, asset_list: list[dict]) -> dict:
             "assetType": "uploaded_asset" if ref else "motion_graphics",
             "subject": brief.get("product", ""), "action": line, "referenceAssetIds": [ref["id"]] if ref else [],
             "transitionOut": "crossfade" if purpose != "cta" else "cut",
-            "soundEffect": "whoosh" if purpose == "hook" else ""})
+            "soundEffect": ""})
     return {
         "title": head[:80] or "Reel", "objective": brief.get("objective", ""), "audience": brief.get("audience", ""),
         "platform": brief.get("platform", "instagram_reels"), "durationSeconds": D,
@@ -325,7 +325,7 @@ def _schema_hint(brief, asset_list, avail):
         "Each scene: id (scene-01...), startSeconds, endSeconds, purpose (hook|problem|demonstration|proof|payoff|cta), "
         "voiceover, onScreenText, visualDescription, assetType, subject, action, environment, composition, lighting, "
         "motion, productPlacement, emotion, negativePrompt, referenceAssetIds[], camera {shot, movement, "
-        "lensOrPerspective}, transitionOut (cut|crossfade|slide|whip), soundEffect (whoosh|pop|none), continuityNotes.\n"
+        "lensOrPerspective}, transitionOut (cut|crossfade|slide|whip), soundEffect (pop|none), continuityNotes.\n"
         f"Rules: scenes are contiguous from 0 to {brief['durationSeconds']}s, {CFG['min_scene_s']}-5 s each; the first "
         f"scene is the hook and ends by {CFG['hook_max_s']}s; the last is the cta. Voiceover fits the scene at "
         f"{CFG['wpm']} words per minute. onScreenText at most {CFG['onscreen_max_chars']} characters. "
@@ -439,8 +439,26 @@ def visual_hash(s, st, avail):
                  avail["image"], avail["stock"], st.get("replaced"))
 
 
-def audio_hash(s, avail):
-    return P.key(s["voiceover"], avail["tts"], CFG["wpm"])
+VOICES = {  # Kokoro voices: (female, male) per language; the brief can name any of the 54 directly
+    "en-us": ("af_heart", "am_michael"), "en-gb": ("bf_emma", "bm_george"), "hi": ("hf_alpha", "hm_omega")}
+
+
+def voice_for(spec: dict, brief: dict) -> tuple[str, float, str]:
+    """Voice, speed and language from the brief and the director's voice direction. Deterministic."""
+    direction = (f"{brief.get('voiceStyle', '')} {spec['voiceover'].get('voiceDirection', '')} "
+                 f"{brief.get('brandVoice', '')}").lower()
+    language = (brief.get("language") or "English").lower()
+    lang = "hi" if "hindi" in language else "en-gb" if "british" in direction else "en-us"
+    male = bool(re.search(r"\b(male|man|deep|baritone|guy)\b", direction)) and "female" not in direction
+    voice = brief.get("speaker") if brief.get("speaker") not in (None, "", "auto") else VOICES[lang][male]
+    speed = (CFG["voice_speed_fast"] if re.search(r"energetic|punchy|quick|fast|hype|excited", direction)
+             else CFG["voice_speed_calm"] if re.search(r"calm|slow|soothing|gentle|soft", direction)
+             else CFG["voice_speed"])
+    return voice, speed, lang
+
+
+def audio_hash(s, avail, voice=None):
+    return P.key(s["voiceover"], avail["tts"], CFG["wpm"], voice)
 
 
 # ---------- 4. production stages ----------
@@ -502,16 +520,18 @@ def stage_assets(con, reel_id, spec, asset_list):
 
 def stage_voice(con, reel_id, spec, brief=None):
     avail, st = P.available(), scene_state(con, reel_id)
-    mute = (brief or {}).get("voice") == "off"
+    brief = brief if brief is not None else load(con, reel_id)["brief"]
+    mute = brief.get("voice") == "off"
+    v = voice_for(spec, brief)
     for s in spec["scenes"]:
         cur = st.get(s["id"], {})
-        h = audio_hash(s, avail) + ("-mute" if mute else "")
+        h = audio_hash(s, avail, v) + ("-mute" if mute else "")
         if (cur.get("audio") or {}).get("hash") == h:
             continue
         if mute or not s["voiceover"].strip():
             save_scene(con, reel_id, s["id"], audio={"hash": h, "path": None, "duration": 0, "words": []})
             continue
-        path, meta = P.tts(s["voiceover"], CFG["wpm"])
+        path, meta = P.tts(s["voiceover"], CFG["wpm"], *v)
         save_scene(con, reel_id, s["id"], audio={"hash": h, "path": str(path), "duration": P.wav_seconds(path),
                                                   **meta, "words": None})
 
@@ -549,8 +569,7 @@ def timeline(spec: dict, brief: dict, st: dict, asset_list: list[dict], preview:
             words += [{"w": w, "t0": round(start + a0, 3), "t1": round(min(t1, start + a1), 3)}
                       for w, a0, a1 in (au.get("words") or []) if start + a0 < t1]
     music = byrole.get("music")
-    sfx = [{"kind": "whoosh", "t": s["end"]} for s in scenes[:-1] if s["transition"] != "cut"]
-    sfx += [{"kind": "pop", "t": sc["startSeconds"]} for sc in spec["scenes"] if "pop" in sc["soundEffect"].lower()]
+    sfx = [{"kind": "pop", "t": sc["startSeconds"]} for sc in spec["scenes"] if "pop" in sc["soundEffect"].lower()]
     font = byrole.get("font")
     return {
         "size": [W, H], "fps": CFG["preview_fps"] if preview else CFG["fps"], "duration": D, "preview": preview,
@@ -562,6 +581,7 @@ def timeline(spec: dict, brief: dict, st: dict, asset_list: list[dict], preview:
         "music": {"path": music["path"] if music else str(P.music(D + 1, seed)[0]), "volume": CFG["music_volume"],
                   "duck": CFG["duck_volume"], "ramp": CFG["duck_ramp_s"]},
         "sfx": sfx, "sfx_volume": CFG["sfx_volume"], "transition_s": CFG["transition_s"],
+        "texture": {"dither": CFG["texture_dither_alpha"], "ascii": CFG["texture_ascii_alpha"]},
         "logo": byrole["logo"]["path"] if "logo" in byrole and byrole["logo"]["kind"] == "image" else None,
         "cta": spec["callToAction"]["onScreenText"], "title": spec["title"],
     }
@@ -788,7 +808,11 @@ def judge_frames(frames: list[dict], spec: dict, brief: dict, temperature: float
         f"{shots}\nScript:\n{script}\n"
         f'Return {{"scores": {{{", ".join(f"{c!r}: 0-10" for c in VISUAL)}}}, "stopScroll": 0-10 (would you stop '
         'scrolling in the first 2 seconds), "verdict": str (one blunt sentence), "issues": [{"sceneId", '
-        '"criterion", "severity": "major|minor", "problem", "fix"}]}',
+        '"criterion", "severity": "major|minor", "problem", "fix"}], "seen": str (second by second, what a '
+        'scroller actually sees and how it looks and feels, honestly, including if it looks cheap; plain words, '
+        'no scores), "couldBe": str (the same Reel, same script and product, with its visual problems fixed: '
+        'what a scroller would see instead, second by second), "couldBeScore": 0-10 (your score for that fixed '
+        'version)}',
         images, temperature)
     scores = {c: max(0.0, min(10.0, float(v))) for c, v in (raw.get("scores") or {}).items() if c in VISUAL}
     ids = {s["id"] for s in spec["scenes"]}
@@ -801,7 +825,8 @@ def judge_frames(frames: list[dict], spec: dict, brief: dict, temperature: float
         if x.sceneId in ids or x.sceneId is None:
             issues.append({**x.model_dump(), "source": "vision"})
     return {"scores": scores, "stopScroll": float(raw.get("stopScroll") or 0), "verdict": str(raw.get("verdict", ""))[:300],
-            "issues": issues}
+            "issues": issues, "seen": str(raw.get("seen") or "")[:2000], "couldBe": str(raw.get("couldBe") or "")[:2000],
+            "couldBeScore": max(0.0, min(10.0, float(raw.get("couldBeScore") or 0)))}
 
 
 def visual_review(spec: dict, brief: dict, st: dict, mp4: Path) -> dict:
@@ -814,7 +839,8 @@ def visual_review(spec: dict, brief: dict, st: dict, mp4: Path) -> dict:
     try:
         j = judge_frames(frames, spec, brief)
         out["scores"] = {c: min(scores.get(c, 10.0), j["scores"].get(c, 10.0)) for c in set(scores) | set(j["scores"])}
-        out.update(stopScroll=j["stopScroll"], verdict=j["verdict"], issues=issues + j["issues"],
+        out.update(stopScroll=j["stopScroll"], verdict=j["verdict"], issues=issues + j["issues"], seen=j["seen"],
+                   couldBe=j["couldBe"], couldBeScore=j["couldBeScore"],
                    by="measured+" + P.available()["vision"])
     except (P.NotConfigured, ValueError, KeyError) as e:
         out["note"] = f"frames not judged by a model: {str(e)[:160]}"

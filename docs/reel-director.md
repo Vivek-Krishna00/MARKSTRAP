@@ -21,7 +21,7 @@ No paid provider: `make reel-demo` (add `FINAL=1` for 1080p) renders the fixture
 
 ## Setup
 - `make setup` installs MoviePy and Pillow; ffmpeg comes bundled via `imageio-ffmpeg` (no system install).
-- `make reel-setup` installs Piper TTS and downloads `en_US-lessac-medium` (~60 MB) into `data/voices/`.
+- `make reel-setup` installs Kokoro (kokoro-onnx, ~350 MB model + voices) and Piper (~60 MB fallback) into `data/voices/`.
   Without it the voice track is silent and captions are timed at the `reel.wpm` dial.
 - Optional word timings from the audio: `pip install faster-whisper` and `REEL_TIMING_PROVIDER=whisper`.
 
@@ -31,7 +31,7 @@ No paid provider: `make reel-demo` (add `FINAL=1` for 1080p) renders the fixture
 | text | `engine/llm.py` (open model; `LLM_PROVIDER`/`LLM_BASE_URL`) | template storyboard + rule-based critic (`mock`) |
 | image | `IMAGE_BASE_URL` (open-weight, OpenAI-compatible; e.g. FLUX.1-schnell) | assigned upload, else motion graphics |
 | video | none yet: no open video model host (Wan 2.x / LTX-Video would plug into `reel_providers.video`) | still + Ken Burns |
-| tts | Piper | silent clip |
+| tts | Kokoro-82M (default; 54 voices incl. Hindi; voice/speed from the brief's language + voice direction, or the Voice picker), Piper fallback | silent clip |
 | timing | faster-whisper | per-word share of each scene's clip |
 | music | your upload (role = music) | procedural pad, generated, no licence to track |
 | stock | `openverse` (CC images that allow modification, attribution stored on the asset) | off |
@@ -60,11 +60,29 @@ Sora and other proprietary APIs are deliberately absent (hackathon rule, and no 
   of scenes with real photos/footage. Scores merge by minimum; the UI shows stop-scroll, verdict and both stats.
   Without a vision model only the measured checks run.
 - **Proof** (`make reel-eval`, ~₹2): the same storyboard rendered broken / placeholder / real CC photos and judged
-  3× blind. Result in `docs/reel-eval.md`: broken 3.2 < placeholder 6.6 < real 7.3 (stop-scroll 1.0 / 4.7 / 6.3), PASS.
+  3× blind; pass = broken scores lowest (placeholder vs real is reported, not asserted). Latest `docs/reel-eval.md`:
+  broken 3.1 < real stock photos 5.8 < placeholder 6.4 (after the design upgrade; before it, placeholder trailed real).
   A naive one-frame prompt gave the placeholder 8/10, which is why the rubric and measured checks exist.
+- **MiroFish screening** (`make reel-screen`, ~4 min, `engine/reel_screen.py`): Llama watches each rendered Reel
+  (3 reads averaged) and writes what a scroller sees, blunt about how it looks, plus a "with fixes" version. Two
+  OASIS feeds with the same 100 personality-model people (as rendered / with fixes, so nobody compares twins);
+  population/4..population/2 act per round for fair exposure. Per post: reach, share/engage/dislike, the people's
+  own words, crowd score; screening = 70% Llama + 30% crowd (`reel.screen_llama_weight`, the user's call).
+  Latest run (`docs/reel-screening.md`): broken 3.4 < placeholder 5.8 < real 6.5, the crowd alone agreeing
+  (4.7 < 6.0 < 7.4); fixes worth +3.7 / +2.4 / +1.5. Limits: people read Llama's words, not pixels; "with fixes" is
+  a described cut, not a render; reach swings with the recommender run to run; LLM people almost never dislike.
+- **Motion-graphics designs** (when a scene has no photo/footage), chosen by the scene's purpose: hook = words slam
+  in with a shake under a spotlight; problem = typewriter + cursor; demonstration = card slides up with a progress
+  bar; proof = the first number counts up (+ five stars filling for ratings); payoff = price stamp lands with an
+  overshoot; CTA = logo + breathing button. Film grain on top. Behind the text, a moving texture in the brand's
+  ASCII/dither style (`compose.field`): hook = dithered shockwave, problem = ASCII rain, demo = dithered waves,
+  proof = ripple, payoff = sunburst, CTA = drifting ASCII blobs (`reel.texture_*_alpha`, 0 = off).
+- **Sound**: voice + music (ducked under the voice) + an optional soft low tick on scenes marked `pop`. The noise
+  "whoosh" sweeps at transitions were removed (user: they hurt). Measured effect on the demo: scene variety
+  0.10 → 0.16, MiroFish screening 5.8 → 7.3 (crowd 6.0 → 8.7), Llama in the proof run 6.4 → 6.4–6.5 (within noise).
 - **Composer**: `engine/compose.py` draws `reel.timeline()` only: Ken Burns stills, video, motion graphics,
   crossfade/slide/whip, word-highlight captions in the safe zones, per-scene voice, music ducked under the voice,
-  whoosh/pop SFX, logo + CTA end card. Renders in a subprocess with a timeout.
+  a soft tick on `pop` scenes, logo + CTA end card. Renders in a subprocess with a timeout.
 - Dials: `config.yaml` → `reel:`.
 
 ## Limits

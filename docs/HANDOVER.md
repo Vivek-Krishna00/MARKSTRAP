@@ -2,7 +2,7 @@
 
 Read this first, then `CLAUDE.md`, `docs/architecture.md` and `docs/reel-director.md`.
 Repo: github.com/Vivek-Krishna00/MARKSTRAP (**public**), branch `main` (commits go straight to main).
-`make test` = 46 passing (23 engine/personality + 13 Reel Director + 10 agency workflow).
+`make test` = 48 passing (23 engine/personality + 15 Reel Director + 10 agency workflow).
 
 ## What this is
 Hackathon project; every tool and model inside the product is open source / open weight (hard rule).
@@ -18,7 +18,7 @@ Hackathon project; every tool and model inside the product is open source / open
 
 ## Fresh clone → running (not in git: `.env`, `secrets/`, `data/`)
 1. `make setup` (venv, deps incl. MoviePy/Pillow/bundled ffmpeg; copies `.env.example` → `.env`).
-2. `make reel-setup` — Piper TTS + `en_US-lessac-medium` voice (~60 MB) into `data/voices/`. Skip it and Reels
+2. `make reel-setup` — Kokoro-82M voices (~350 MB, default) + Piper fallback into `data/voices/`. Skip it and Reels
    render with a silent voice track.
 3. Brain: fill `.env` (`LLM_PROVIDER=vertex` + `GCP_PROJECT_ID`, needs `gcloud auth application-default login`), or
    any OpenAI-compatible open model via `LLM_BASE_URL`. No brain: set `REEL_TEXT_PROVIDER=mock` for Reels.
@@ -90,6 +90,20 @@ Hackathon project; every tool and model inside the product is open source / open
   `make reel-eval` proves ranking: broken 3.2 < placeholder 6.6 < real photos 7.3 → `docs/reel-eval.md`.
   Vertex Llama 4 accepts max 5 images per request (frames are tiled). `visual_variety_min` 0.12 sits between
   placeholder (0.10) and real (0.27). Openverse limited to licences allowing modification (captions = derivative).
+- **MiroFish screening** (`make reel-screen`, user asked for Llama to weigh high): Llama's description of the real
+  frames + a "with fixes" twin go into two separate OASIS feeds (same 100 people) → reach, reactions, quotes;
+  score = 70% Llama + 30% crowd. Result: broken 3.4 < placeholder 5.8 < real 6.5, crowd alone agrees. Shown on the
+  Reel page when present. `evolve.make_people` was extracted from `seed_campaign` (no behaviour change) for this.
+- Fixed a UI race: `reel.view` now reads `busy` before the row (a run ending in between looked idle-but-unfinished).
+- **Voice = Kokoro-82M** (Apache-2.0 via kokoro-onnx MIT): voice/speed from language + voice direction, Voice (`brief.speaker`;
+  `brief.voice` is Kanishk's on/off switch) and Language pickers in the brief, Hindi voices `hf_alpha`/`hm_omega`. **Motion graphics per scene purpose** (slam,
+  typewriter, card, counter+stars, price stamp, pulsing CTA, grain) over moving ASCII/dither textures; whoosh
+  sweeps removed (user: hurt the ears), only a soft tick on `pop` scenes. Demo screening 5.8 → 7.3.
+- Merged Kanishk's agency/React rewrite (2026-10-25): Reel UI now lives in `site/src/app/pages/Reel.jsx`
+  (Language, Speaker, screening table added there); `brief.voice` = on/off (his), `brief.speaker` = Kokoro voice (ours).
+- **Images on Vertex: blocked.** FLUX.1-schnell and Qwen-Image exist in Model Garden only as *deploy* (hourly GPU),
+  no MaaS; free-trial accounts get no GPU quota. Needs: upgrade account (credit carries over) + L4 quota for
+  Vertex serving, then deploy FLUX.1-schnell on L4 (~₹70–100/h while up) with up/down commands.
 - Demo fixture: `engine/data/reel_demo.json` (Midnight Crumb cake delivery, 20 s, 6 scenes).
 - UI verified with Playwright on system Chrome (Chrome extension was not connected): full flow, light/dark,
   390 px width, no console errors.
@@ -108,8 +122,7 @@ Hackathon project; every tool and model inside the product is open source / open
 0. **Live run of the new agency flow on Vertex** (DeepSeek) has not been done: the second session's machine had no
    gcloud/ADC. Run the Microsoft → Xbox story once with the real brain and check research extraction quality,
    brief, concept distinctness and reviews. Reel CTA now uses the brief's action sentence (a long URL overflowed).
-1. Images (parked by the user): pick a host for an open-weight model (CPU SD-Turbo, or upgrade for an L4), set
-   `IMAGE_BASE_URL`. Biggest visual upgrade for Reels too.
+1. Images: user chose Vertex → waiting on account upgrade + L4 quota (see Reel Director section).
 2. Generated video clips: needs a hosted open video model (Wan 2.x / LTX-Video) behind `reel_providers.video`.
 3. Before demo: one Reel on Vertex with a real logo + 2–3 product photos; keep `make reel-demo FINAL=1` as fallback.
    Show `docs/reel-eval.md` as evidence the judge separates bad from good.
